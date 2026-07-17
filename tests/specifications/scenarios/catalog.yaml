@@ -1,0 +1,201 @@
+# Tracer fake-ACP / acceptance scenario catalog
+# Owner: W0-D (tests/specifications)
+# Event types: W0-A TRACER_EVENT_PROTOCOL_V1 only
+# schemaVersion: 1
+
+schemaVersion: 1
+description: >
+  Scenario identifiers for the deterministic fake ACP runtime and for
+  mapping Gate 1 acceptance cases. Wave 1 implements the fake driver.
+
+defaults:
+  transport: ndjson-jsonrpc-2.0
+  runtimeKind: acp-stdio
+  standardCi: true
+  # Time budgets are soft defaults for fake tests (injectable)
+  budgets:
+    T_init_ms: 20000
+    T_cancel_ms: 10000
+    T_term_ms: 5000
+
+# ---------------------------------------------------------------------------
+scenarios:
+
+  - id: happy_prompt_stream
+    acceptanceIds: [VS-01]
+    failureIds: []
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Initialize, session ready, prompt stream with tools, complete, stop.
+    wireFixtures:
+      - tests/fixtures/acp/initialize-request.json
+      - tests/fixtures/acp/session-prompt-stream.jsonl  # synthetic structural reference only
+    expectedEvents: tests/specifications/expected-events/happy_prompt_stream.json
+    notes:
+      - session-prompt-stream.jsonl is synthetic; do not claim live model parity
+      - assert W0-A types not W0-B conceptual names
+
+  - id: auth_required_session_new
+    acceptanceIds: [VS-02]
+    failureIds: [F-A01, F-A05]
+    evidence: live-scrubbed  # fixture shape; fake reimplements
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: >
+      Process initialize succeeds; session/new without authenticate fails with
+      Authentication required. Distinguishes process ready from session ready.
+    wireFixtures:
+      - tests/fixtures/acp/session-new-auth-required.json
+    expectedEvents: tests/specifications/expected-events/auth_required_session_new.json
+    notes:
+      - process startup != authenticated session creation
+      - prefer AuthenticationRequired errorClass when contract adds it
+
+  - id: permission_allow
+    acceptanceIds: [VS-03]
+    failureIds: [F-C07]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Permission reverse-request then allow; tools complete.
+    wireFixtures:
+      - tests/fixtures/acp/permission-request.json  # synthetic
+    expectedEvents: tests/specifications/expected-events/permission_allow.json
+
+  - id: permission_deny
+    acceptanceIds: [VS-03]
+    failureIds: [F-C06, F-C09]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Permission deny; fail closed; no silent success.
+    expectedEvents: tests/specifications/expected-events/permission_deny.json
+
+  - id: cancel_mid_stream
+    acceptanceIds: [VS-04]
+    failureIds: [F-C01]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Cancel during streaming agent/tool updates.
+    wireFixtures:
+      - tests/fixtures/acp/cancel-notification.json  # synthetic
+    expectedEvents: tests/specifications/expected-events/cancel_mid_stream.json
+
+  - id: cancel_while_permission_pending
+    acceptanceIds: [VS-05]
+    failureIds: [F-C04, F-C05]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: >
+      Cancel while session/request_permission is open. Must finish within
+      T_cancel+T_term; no deadlock; no orphan.
+    expectedEvents: tests/specifications/expected-events/cancel_while_permission_pending.json
+    notes:
+      - Stage 0.1 risk: ignoring permission parks deadlocks the turn
+
+  - id: malformed_frame
+    acceptanceIds: [VS-08]
+    failureIds: [F-R01]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Emit invalid JSON on stdout mid-session; adapter emits protocol error.
+    expectedEvents: tests/specifications/expected-events/malformed_frame.json
+
+  - id: unknown_vendor_notification
+    acceptanceIds: [VS-08]
+    failureIds: [F-R05]
+    evidence: synthetic
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Unmapped vendor notification maps to adapter.protocol.unknown.
+    expectedEvents: tests/specifications/expected-events/unknown_vendor_notification.json
+    notes:
+      - vendor-extension compatibility; must not block MVP if vendor changes
+
+  - id: eof_mid_prompt
+    acceptanceIds: [VS-07]
+    failureIds: [F-P07]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Close stdout / exit with pipe EOF during prompt; no silent complete.
+    expectedEvents: tests/specifications/expected-events/eof_mid_prompt.json
+
+  - id: crash_nonzero_exit
+    acceptanceIds: [VS-06]
+    failureIds: [F-P06]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Non-zero exit mid-run; session failed/disconnected; not running.
+    expectedEvents: tests/specifications/expected-events/crash_nonzero_exit.json
+
+  - id: cancel_unsupported
+    acceptanceIds: [VS-11]
+    failureIds: [F-C03, F-R08]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Advertise no cancellation; cooperative cancel unsupported; process stop fallback.
+    expectedEvents: tests/specifications/expected-events/cancel_unsupported.json
+
+  - id: slow_cancel_ack
+    acceptanceIds: [VS-09]
+    failureIds: [F-C02, F-P10]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Delay cancel handling past T_cancel to force kill path; no orphans.
+    expectedEvents: tests/specifications/expected-events/slow_cancel_ack.json
+
+  - id: duplicate_response_id
+    acceptanceIds: [VS-08]
+    failureIds: [F-R03]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Duplicate JSON-RPC response id yields ProtocolViolation; no double apply.
+    expectedEvents: tests/specifications/expected-events/duplicate_response_id.json
+
+  - id: capability_minimal
+    acceptanceIds: [VS-12]
+    failureIds: [F-T05]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Minimal capability set; degrade plan/stream features without crash.
+    expectedEvents: tests/specifications/expected-events/capability_minimal.json
+
+  - id: clean_shutdown_stdin_close
+    acceptanceIds: [VS-09]
+    failureIds: [F-P09]
+    evidence: fake-runtime
+    standardCi: true
+    mayConsumeProviderUsage: false
+    summary: Graceful shutdown; runtime.process.exited expected true; no orphans.
+    expectedEvents: tests/specifications/expected-events/clean_shutdown_stdin_close.json
+
+# ---------------------------------------------------------------------------
+# Live / optional (never standard CI)
+  - id: live_stock_auth_prompt
+    acceptanceIds: [VS-L1]
+    failureIds: [F-A02]
+    evidence: live-authenticated
+    standardCi: false
+    mayConsumeProviderUsage: true
+    summary: Optional stock grok agent --no-leader stdio with real auth and one prompt.
+    notes:
+      - requires credentials; skip without secrets
+      - never treat synthetic stream fixture as this evidence
+
+  - id: live_stock_auth_required_reprobe
+    acceptanceIds: [VS-L2]
+    failureIds: [F-A01]
+    evidence: live-scrubbed
+    standardCi: false
+    mayConsumeProviderUsage: false
+    summary: Optional re-probe of unauthenticated session/new on installed grok.

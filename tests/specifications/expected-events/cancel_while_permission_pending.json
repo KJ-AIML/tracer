@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "cancel_while_permission_pending",
+  "evidence": "fake-runtime",
+  "description": "Deadlock avoidance: cancel must not leave session parked forever on open permission reverse-request.",
+  "preconditionEvents": [
+    { "type": "approval.requested", "min": 1 }
+  ],
+  "action": "tracer_session_cancel_or_stop_without_approval_resolve",
+  "orderedTypeConstraints": [
+    {
+      "anyOf": [
+        {
+          "type": "approval.resolved",
+          "payloadDecisionIn": ["cancel", "deny"]
+        },
+        { "type": "session.cancelled", "min": 1 },
+        { "type": "runtime.process.exited", "min": 1 },
+        { "type": "runtime.process.failed", "min": 1 }
+      ]
+    },
+    {
+      "anyOf": [
+        {
+          "type": "session.status.changed",
+          "payloadToIn": ["stopped", "cancelled", "failed", "disconnected"]
+        },
+        { "type": "session.cancelled", "min": 1 },
+        { "type": "session.failed", "min": 1 }
+      ]
+    }
+  ],
+  "terminalWithinMs": {
+    "from": "cancel_invoked",
+    "budget": "T_cancel_ms + T_term_ms",
+    "hardFailIfExceeded": true
+  },
+  "forbiddenFinalStatuses": ["running", "awaiting_approval"],
+  "orphanCheck": true,
+  "failureIds": ["F-C04", "F-C05"]
+}

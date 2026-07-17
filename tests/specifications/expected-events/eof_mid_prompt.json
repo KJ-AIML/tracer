@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "eof_mid_prompt",
+  "evidence": "fake-runtime",
+  "orderedTypeConstraints": [
+    { "type": "session.prompt.submitted", "min": 1 },
+    {
+      "anyOf": [
+        { "type": "runtime.process.exited", "min": 1 },
+        { "type": "runtime.process.failed", "min": 1 }
+      ]
+    },
+    {
+      "anyOf": [
+        { "type": "session.failed", "min": 1 },
+        {
+          "type": "session.status.changed",
+          "payloadToIn": ["failed", "disconnected"]
+        }
+      ]
+    }
+  ],
+  "payloadNotes": {
+    "runtime.process.exited.expected": false
+  },
+  "forbiddenTypesAsSuccess": ["session.completed"],
+  "forbiddenFinalStatuses": ["running"],
+  "errorClassAnyOf": ["RuntimeDisconnected", "RuntimeCrashed"]
+}

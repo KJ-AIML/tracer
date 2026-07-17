@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "auth_required_session_new",
+  "evidence": "live-scrubbed",
+  "description": "Process may become ready after initialize; session must not become prompt-ready without auth. Wire fixture: tests/fixtures/acp/session-new-auth-required.json",
+  "processVsSessionGates": {
+    "allowRuntimeProcessReadyWithoutSessionReady": true,
+    "forbidSessionReady": true,
+    "forbidSuccessfulSubmitPrompt": true
+  },
+  "orderedTypeConstraints": [
+    { "type": "runtime.process.started", "min": 0 },
+    { "type": "runtime.process.ready", "min": 1, "note": "initialize succeeded" }
+  ],
+  "forbiddenTypes": [
+    "session.ready",
+    "session.prompt.submitted",
+    "session.completed"
+  ],
+  "commandError": {
+    "mustFail": true,
+    "errorClassAnyOf": [
+      "AuthenticationRequired",
+      "AuthenticationFailed",
+      "PromptRejected",
+      "InvalidState",
+      "ProtocolViolation",
+      "ProtocolInitializeFailed"
+    ],
+    "wireReference": {
+      "jsonrpcErrorCode": -32000,
+      "messageContains": "Authentication required",
+      "fixture": "tests/fixtures/acp/session-new-auth-required.json",
+      "fixtureEvidence": "live-scrubbed"
+    }
+  },
+  "notes": [
+    "Do not treat process startup as authenticated session creation",
+    "Additive auth error classes recommended by Stage 0.1 integration"
+  ]
+}

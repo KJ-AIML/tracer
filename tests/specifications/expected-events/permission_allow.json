@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "permission_allow",
+  "evidence": "fake-runtime",
+  "orderedTypeConstraints": [
+    { "type": "session.prompt.submitted", "min": 1 },
+    { "type": "approval.requested", "min": 1 },
+    {
+      "type": "session.status.changed",
+      "min": 0,
+      "payloadToIn": ["awaiting_approval"]
+    },
+    {
+      "type": "approval.resolved",
+      "min": 1,
+      "payloadDecisionIn": ["allow"]
+    },
+    {
+      "anyOf": [
+        { "type": "tool.completed", "min": 1 },
+        { "type": "session.completed", "min": 1 },
+        {
+          "type": "session.status.changed",
+          "payloadToIn": ["ready", "completed"]
+        }
+      ]
+    }
+  ],
+  "pairingRules": [
+    {
+      "before": "approval.requested",
+      "after": "approval.resolved",
+      "matchField": "payload.approvalId"
+    }
+  ],
+  "forbiddenBehaviors": [
+    "auto_approve_without_user_or_policy",
+    "ui_parses_session_request_permission"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "crash_nonzero_exit",
+  "evidence": "fake-runtime",
+  "orderedTypeConstraints": [
+    { "type": "session.prompt.submitted", "min": 1 },
+    {
+      "anyOf": [
+        {
+          "type": "runtime.process.exited",
+          "min": 1,
+          "payloadExpected": { "expected": false }
+        },
+        { "type": "runtime.process.failed", "min": 1 }
+      ]
+    },
+    {
+      "anyOf": [
+        { "type": "session.failed", "min": 1 },
+        {
+          "type": "session.status.changed",
+          "payloadToIn": ["failed", "disconnected"]
+        }
+      ]
+    }
+  ],
+  "afterExitCommands": {
+    "submitPrompt": {
+      "mustFail": true,
+      "errorClassAnyOf": ["RuntimeDisconnected", "RuntimeCrashed", "InvalidState"]
+    }
+  },
+  "forbiddenFinalStatuses": ["running"],
+  "forbiddenTypesAsSuccess": ["session.completed"],
+  "orphanCheck": true
+}

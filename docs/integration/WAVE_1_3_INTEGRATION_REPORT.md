@@ -29,7 +29,7 @@
 | W1-F tip | `e6553c30b9da411d2e77344f0d16529c1c94b582` |
 | W1-F commit | `feat(w1-f): control plane integration (VS-01..14, Tauri glue)` |
 | Merge commit (`--no-ff`) | `4540879283b9dbd9ff87aba1f7f44d623c729dc7` |
-| Candidate integration tip (pre-FF) | `5b2232c84f35408449098ba82c32008d230a46e6` |
+| Candidate integration tip (pre-FF) | `71892ffb21fdfbddbad60f756ac208d020279e7b` |
 
 Merge parents preserved W1-F feat commit (not squashed).
 
@@ -214,7 +214,7 @@ Not run (optional, non-gating). Class: manual local / live authenticated smoke.
 
 ## Final candidate SHA
 
-Integration tip: `5b2232c84f35408449098ba82c32008d230a46e6`
+Integration tip: `71892ffb21fdfbddbad60f756ac208d020279e7b`
 
 ---
 

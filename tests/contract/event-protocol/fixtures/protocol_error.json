@@ -1,0 +1,20 @@
+{
+  "eventVersion": 1,
+  "eventId": "c0000000-0000-4000-8000-000000000001",
+  "sequence": 4,
+  "timestamp": "2026-07-17T12:02:00.000Z",
+  "projectId": "11111111-1111-1111-1111-111111111111",
+  "sessionId": "22222222-2222-2222-2222-222222222222",
+  "agentRunId": "33333333-3333-3333-3333-333333333333",
+  "type": "adapter.protocol.error",
+  "severity": "error",
+  "payload": {
+    "errorClass": "ProtocolParseError",
+    "message": "Malformed JSON-RPC frame on stdout",
+    "retryable": true
+  },
+  "adapter": {
+    "runtimeKind": "acp-stdio",
+    "rawFragment": { "note": "truncated invalid bytes omitted" }
+  }
+}

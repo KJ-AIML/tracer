@@ -1,0 +1,129 @@
+[
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000001",
+    "sequence": 1,
+    "timestamp": "2026-07-17T12:04:00.000Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": null,
+    "type": "session.created",
+    "payload": {}
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000002",
+    "sequence": 2,
+    "timestamp": "2026-07-17T12:04:00.100Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": null,
+    "type": "runtime.process.started",
+    "payload": { "pid": 7, "executable": "fake-acp-runtime", "args": [], "cwd": "." }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000003",
+    "sequence": 3,
+    "timestamp": "2026-07-17T12:04:01.000Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": null,
+    "type": "runtime.process.ready",
+    "payload": {
+      "capabilities": {
+        "promptStreaming": true,
+        "cancellation": true,
+        "planUpdates": false,
+        "toolCalls": true,
+        "approvals": false,
+        "fileChangeNotifications": false,
+        "terminalOutput": false,
+        "sessionResume": false
+      },
+      "protocolVersion": "acp-negotiated"
+    }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000004",
+    "sequence": 4,
+    "timestamp": "2026-07-17T12:04:01.100Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": null,
+    "type": "session.ready",
+    "payload": {}
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000005",
+    "sequence": 5,
+    "timestamp": "2026-07-17T12:04:02.000Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": "33333333-3333-3333-3333-333333333333",
+    "type": "session.prompt.submitted",
+    "payload": { "promptId": "55555555-5555-5555-5555-555555555555", "text": "run a tool", "attachmentCount": 0 }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000006",
+    "sequence": 6,
+    "timestamp": "2026-07-17T12:04:02.100Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": "33333333-3333-3333-3333-333333333333",
+    "type": "tool.started",
+    "payload": {
+      "toolCallId": "tool-1",
+      "name": "read_file",
+      "input": { "path": "README.md" },
+      "risk": "low"
+    }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000007",
+    "sequence": 7,
+    "timestamp": "2026-07-17T12:04:02.500Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": "33333333-3333-3333-3333-333333333333",
+    "type": "session.status.changed",
+    "payload": { "from": "running", "to": "cancelling", "reason": "user_cancel" }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000008",
+    "sequence": 8,
+    "timestamp": "2026-07-17T12:04:02.600Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": "33333333-3333-3333-3333-333333333333",
+    "type": "tool.updated",
+    "payload": { "toolCallId": "tool-1", "status": "cancelled" }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-000000000009",
+    "sequence": 9,
+    "timestamp": "2026-07-17T12:04:02.700Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": "33333333-3333-3333-3333-333333333333",
+    "type": "session.cancelled",
+    "payload": { "reason": "user_cancel", "partial": true }
+  },
+  {
+    "eventVersion": 1,
+    "eventId": "e0000000-0000-4000-8000-00000000000a",
+    "sequence": 10,
+    "timestamp": "2026-07-17T12:04:02.800Z",
+    "projectId": "11111111-1111-1111-1111-111111111111",
+    "sessionId": "22222222-2222-2222-2222-222222222222",
+    "agentRunId": "33333333-3333-3333-3333-333333333333",
+    "type": "session.status.changed",
+    "payload": { "from": "cancelling", "to": "stopped" }
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session/new",
+    "params": {
+      "cwd": "{{PROJECT_ROOT}}",
+      "mcpServers": []
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32000,
+      "message": "Authentication required",
+      "data": "no auth method id provided"
+    }
+  },
+  "_fixture": {
+    "source": "live-capture-scrubbed",
+    "precondition": "initialize succeeded; authenticate not called",
+    "binary": "grok 0.2.102"
+  }
+}

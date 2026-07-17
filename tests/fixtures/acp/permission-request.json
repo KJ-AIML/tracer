@@ -1,0 +1,54 @@
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "method": "session/request_permission",
+  "params": {
+    "sessionId": "11111111-1111-4111-8111-111111111111",
+    "toolCall": {
+      "toolCallId": "call_example_edit",
+      "title": "Edit README.md",
+      "kind": "edit",
+      "status": "pending",
+      "locations": [
+        {
+          "path": "README.md"
+        }
+      ]
+    },
+    "options": [
+      {
+        "optionId": "allow-once",
+        "name": "Allow once",
+        "kind": "allow_once"
+      },
+      {
+        "optionId": "allow-always",
+        "name": "Allow always for this session",
+        "kind": "allow_always"
+      },
+      {
+        "optionId": "reject-once",
+        "name": "Reject",
+        "kind": "reject_once"
+      }
+    ]
+  },
+  "_exampleClientResponse": {
+    "jsonrpc": "2.0",
+    "id": 42,
+    "result": {
+      "outcome": {
+        "outcome": "selected",
+        "optionId": "allow-once"
+      }
+    }
+  },
+  "_fixture": {
+    "source": "synthetic",
+    "notes": [
+      "Shape follows ACP permission reverse-request usage in Grok shell/tests",
+      "option kind strings may appear as enum names depending on serializer; adapter should accept allow_once/AllowOnce variants",
+      "paths are project-relative"
+    ]
+  }
+}

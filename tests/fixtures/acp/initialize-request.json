@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": 1,
+    "clientCapabilities": {
+      "fs": {
+        "readTextFile": true,
+        "writeTextFile": true
+      },
+      "terminal": false
+    },
+    "_meta": {
+      "clientType": "tracer-recon",
+      "clientIdentifier": "tracer",
+      "clientVersion": "0.0.0-recon",
+      "startupHints": {
+        "nonInteractive": true,
+        "skipGitStatus": true,
+        "skipProjectLayout": true
+      }
+    }
+  }
+}

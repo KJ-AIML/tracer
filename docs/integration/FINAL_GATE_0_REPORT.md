@@ -1,11 +1,11 @@
-﻿# Final Gate 0 Report â€” Tracer Wave 0 Complete Integration
+# Final Gate 0 Report — Tracer Wave 0 Complete Integration
 
 **Gate:** 0 (full Wave 0: W0-A + W0-B + W0-C + W0-D)  
 **Task:** `tracer-w0-final-integration`  
 **Work item:** W0-FINAL  
 **Integrator host:** `grok-build`  
-**Heli session:** `heli-ses-7c2f27d1-a702-4c12-b07f-9962714c8c09`  
-**Lease:** `heli-lease-a1cb1862-7eef-4730-b41a-aee98270bec6`  
+**Heli session (integration):** `heli-ses-7c2f27d1-a702-4c12-b07f-9962714c8c09`  
+**Heli session (close-table fix):** `heli-ses-7f5a649c-a76b-412c-af10-8319818abc63`  
 **Write target:** `tracer` (`repos/tracer` main checkout)  
 **Integration branch:** `integration/tracer-w0-final`  
 **Date:** 2026-07-17
@@ -15,14 +15,14 @@
 | Field | Value |
 |---|---|
 | **Gate 0** | **PASS** |
-| **Wave 1 authorization** | **YES** â€” foundation modules W1-Aâ€¦W1-H may be claimed after this lands on `main` |
+| **Wave 1 authorization** | **YES** — foundation modules W1-A…W1-H may be claimed after this lands on `main` |
 | Material unresolvable contradictions | **None** |
 | Reconciliation class | Documentation integration only (no contract rewrites; no application source) |
-| Docs-only integration validity | Valid â€” all deliverables under `docs/` and `tests/{fixtures,specifications}/` |
+| Docs-only integration validity | Valid — all deliverables under `docs/` and `tests/{fixtures,specifications}/` |
 
 **Explicit Wave 1 authorization statement**
 
-Because **Gate 0 is PASS**, Wave 1 foundation implementation tasks are **authorized** once this integration is fast-forwarded onto `main`:
+Because **Gate 0 is PASS**, Wave 1 foundation implementation tasks are **authorized** once this integration is on `main`:
 
 - W1-A Desktop Shell  
 - W1-B Domain and Event Protocol  
@@ -41,10 +41,10 @@ Because **Gate 0 is PASS**, Wave 1 foundation implementation tasks are **authori
 |---|---|---|---|---|
 | W0-A Architecture & Contracts | `tracer-w0-architecture-contracts` | `agent/tracer-w0-architecture-contracts` | `aa7b778d7f1c571e225b5727dd2dd6bb80c2ebef` | Integrated at Gate 0.1 |
 | W0-B Grok Runtime Recon | `tracer-w0-grok-runtime-recon` | `agent/tracer-w0-grok-runtime-recon` | `a141d00bc0c2a54ecb9a9c3045b2f04a91bfd524` | Integrated at Gate 0.1 |
-| W0-I Stage 0.1 Integration | `tracer-w0-integration-ab` | `integration/tracer-w0-ab` â†’ `main` | Stage report on main | Gate 0.1 **PASS** |
+| W0-I Stage 0.1 Integration | `tracer-w0-integration-ab` | `integration/tracer-w0-ab` → `main` | Stage report on main | Gate 0.1 **PASS** |
 | W0-C Product UX | `tracer-w0-product-ux` | `agent/tracer-w0-product-ux` | `23a66eaf3a91c63dffe4e462d30b759004e0b871` | Merged this gate |
 | W0-D Test Strategy | `tracer-w0-test-strategy` | `agent/tracer-w0-test-strategy` | `977ddee928adcaa39770436007e5af5c0bf7dbc8` | Merged this gate |
-| W0-FINAL | `tracer-w0-final-integration` | `integration/tracer-w0-final` â†’ `main` | See Â§12 | This report |
+| W0-FINAL | `tracer-w0-final-integration` | `integration/tracer-w0-final` → `main` | See §12 / §16 | This report |
 
 ### Prior Gate 0.1 context
 
@@ -64,7 +64,7 @@ That tip already contained W0-A, W0-B, Stage 0.1 integration report, and reconci
 |---|---|---|---|
 | W0-C | `agent/tracer-w0-product-ux` | `23a66eaf3a91c63dffe4e462d30b759004e0b871` | `5b936412b982cc4310f1196caef023a968ea070a` |
 | W0-D | `agent/tracer-w0-test-strategy` | `977ddee928adcaa39770436007e5af5c0bf7dbc8` | `5b936412b982cc4310f1196caef023a968ea070a` |
-| Main at start | `main` | `5b936412b982cc4310f1196caef023a968ea070a` | â€” |
+| Main at start | `main` | `5b936412b982cc4310f1196caef023a968ea070a` | — |
 
 ### 3.2 Worker commit chains integrated
 
@@ -92,12 +92,14 @@ That tip already contained W0-A, W0-B, Stage 0.1 integration report, and reconci
 | 1 | `eb9c7b14df3949b684c049e21444cbd102236e15` | `merge(w0-c): product UX into integration/tracer-w0-final` |
 | 2 | `1cdf3383febbe6e289f664b4d0d4c33bc961dbea` | `merge(w0-d): test strategy into integration/tracer-w0-final` |
 
-### 3.4 Reconciliation / Gate 0 artifact commits
+### 3.4 Gate 0 artifact commits
 
-| SHA | Message | Notes |
-|---|---|---|
-| *(filled at close)* | `docs(w0-final): Final Gate 0 report, readiness and traceability matrices` | This report + readiness + RTM |
-| *(none required)* | semantic contract rewrites | No material contradictions required edits to W0-A/B/C/D bodies |
+| SHA | Message |
+|---|---|
+| `58db0891cfc966c02e7a6f581fee2aa097e46513` | `docs(w0-final): Final Gate 0 report, readiness and traceability matrices` |
+| `cb09ca0270e5853dc303005403a29053836f45a1` … | Close-table / tip-SHA refresh commits (see §16) |
+
+No semantic contract rewrites of W0-A/B/C/D bodies were required.
 
 ### 3.5 Prior Stage 0.1 merge commits (already on main)
 
@@ -167,7 +169,7 @@ That tip already contained W0-A, W0-B, Stage 0.1 integration report, and reconci
 
 ## 5. Semantic reconciliation
 
-### 5.1 Domain vocabulary â€” **aligned**
+### 5.1 Domain vocabulary — **aligned**
 
 | Term | Authority | W0-C | W0-D |
 |---|---|---|---|
@@ -183,13 +185,13 @@ That tip already contained W0-A, W0-B, Stage 0.1 integration report, and reconci
 
 No parallel incompatible UX/test vocabulary found. Product event names are exclusively W0-A strings; W0-B conceptual names appear only as **forbidden aliases** in expected-event packs (e.g. `permission.requested`, `message.agent.delta`).
 
-### 5.2 Session lifecycle â€” **aligned**
+### 5.2 Session lifecycle — **aligned**
 
 Shared W0-A status set used by UX and tests:
 
 ```text
-creating Â· starting_runtime Â· ready Â· running Â· awaiting_approval Â·
-cancelling Â· completed Â· failed Â· disconnected Â· stopped
+creating · starting_runtime · ready · running · awaiting_approval ·
+cancelling · completed · failed · disconnected · stopped
 ```
 
 | Lifecycle concern | Contract / recon | UX | Tests |
@@ -202,14 +204,14 @@ cancelling Â· completed Â· failed Â· disconnected Â· stopped
 | Session creation | `session.ready` | Composer only when ready | VS-01/02 |
 | Prompt / streaming | `session.prompt.submitted`, deltas | Timeline live | VS-01 |
 | Waiting for approval | `awaiting_approval` | Interrupt fail-closed | VS-03/05 |
-| Cancelling / cancelled | `cancelling` â†’ `stopped` | Cancel honesty | VS-04/05/11 |
+| Cancelling / cancelled | `cancelling` → `stopped` | Cancel honesty | VS-04/05/11 |
 | Completed | `completed` or back to `ready` | Terminal success; multi-turn policy open | VS-01 |
-| Failed / disconnected / crash | exit/fail events | Never â€œRunningâ€ after exit | VS-06/07 |
+| Failed / disconnected / crash | exit/fail events | Never "Running" after exit | VS-06/07 |
 | Recovery / resume after restart | storage + reconcile | History reload | VS-10; F-S04 |
 
 Every visible first-slice UX state has a backend status/event/error source and a failure-matrix or VS ownership path.
 
-### 5.3 Evidence boundary â€” **aligned**
+### 5.3 Evidence boundary — **aligned**
 
 | Label | Meaning | Where enforced |
 |---|---|---|
@@ -221,7 +223,7 @@ Every visible first-slice UX state has a backend status/event/error source and a
 
 **Non-claim (normative):** Synthetic `session-prompt-stream.jsonl` and permission/cancel fixtures do **not** prove live authenticated multi-turn tool/permission parity. Stage 0.1 did **not** exercise authenticated live prompt streams on Windows with credentials.
 
-### 5.4 Runtime invocation â€” **aligned**
+### 5.4 Runtime invocation — **aligned**
 
 | Layer | Decision |
 |---|---|
@@ -229,31 +231,31 @@ Every visible first-slice UX state has a backend status/event/error source and a
 | W0-A adapter example args | Illustrative logical placeholders only (`runtimeKind: acp-stdio`); not stock CLI argv |
 | Process startup | OS spawn + NDJSON pipes; no ready banner from runtime |
 | Authenticated session creation | Separate gate after initialize; stock requires `authenticate` before usable `session/new` |
-| Live Windows authenticated session | **Not claimed** â€” recon blocked by missing credentials; CI uses fake |
+| Live Windows authenticated session | **Not claimed** — recon blocked by missing credentials; CI uses fake |
 | Platform | Windows Job Object kill-on-close documented; not generalized as identical on all OS |
 
-### 5.5 ACP compatibility â€” **aligned**
+### 5.5 ACP compatibility — **aligned**
 
 | Topic | Decision |
 |---|---|
 | MVP surface | Standard ACP core only |
-| Vendor `x.ai/*` | Optional later; unknown â†’ `adapter.protocol.unknown` |
+| Vendor `x.ai/*` | Optional later; unknown → `adapter.protocol.unknown` |
 | UI coupling | React never parses raw ACP / vendor frames (`ADR-002`) |
 | Framing | NDJSON JSON-RPC 2.0 for stock + fake |
 | Tests | Contract packs assert W0-A types; vendor scenario is non-blocking for MVP |
 
-### 5.6 UX-to-test critical path map â€” **aligned**
+### 5.6 UX-to-test critical path map — **aligned**
 
 | UX / product condition | Backend condition | Fake / fixture scenario | Acceptance / failure | Recovery |
 |---|---|---|---|---|
 | Runtime missing | Spawn fail | fake spawn error | F-P01; Flow C | Fix PATH/config; new session |
-| Auth required | `session/new` âˆ’32000 | `auth_required_session_new` + live-scrubbed fixture | VS-02; F-A01 | Authenticate then session |
+| Auth required | `session/new` -32000 | `auth_required_session_new` + live-scrubbed fixture | VS-02; F-A01 | Authenticate then session |
 | Auth failed | auth error | fake scripted / optional live | F-A02 | Retry method / stop |
 | Capability unsupported | soft/hard mismatch | `cancel_unsupported`, `capability_minimal` | VS-11/12; F-R08 | Fallback or different runtime |
 | Process up, session create failed | dual status | auth or protocol fail paths | Flow D; F-A01 | Stop process; retry |
 | Malformed protocol | bad frame | `malformed_frame` | VS-08; F-R01 | Continue or stop if wedged |
 | Runtime EOF | pipe death mid-prompt | `eof_mid_prompt` | VS-07; F-P07 | New process |
-| Crash | non-zero exit | `crash_nonzero_exit` | VS-06; F-P06 | New session; no â€œrunningâ€ |
+| Crash | non-zero exit | `crash_nonzero_exit` | VS-06; F-P06 | New session; no "running" |
 | Approval requested | reverse-request | `permission_allow` / `deny` | VS-03; F-C06/07 | Allow/deny |
 | Approval rejected / fail closed | deny | `permission_deny` | VS-03; F-C09 | Continue honestly |
 | Cancellation | cancel mid-stream | `cancel_mid_stream` | VS-04; F-C01 | Stop or new prompt |
@@ -261,7 +263,7 @@ Every visible first-slice UX state has a backend status/event/error source and a
 | Successful completion | stream complete | `happy_prompt_stream` | VS-01 | Review / stop |
 | Session restore after app restart | storage reconcile | VS-10 (+ F-S04) | T3 | History only; no fake running |
 
-### 5.7 MVP scope fence â€” **aligned**
+### 5.7 MVP scope fence — **aligned**
 
 All Wave 0 streams exclude from Gate 1 / MVP:
 
@@ -305,7 +307,7 @@ Future-only sections are labeled as such in IA, vertical slice, and test strateg
 | Live-scrubbed initialize + auth-required error shapes | Yes (structural mapping) |
 | Synthetic stream / permission / cancel fixtures | Yes (structural only) |
 | Fake-runtime scenario design (not yet implemented) | Strategy complete; **implementation is Wave 1** |
-| Live authenticated multi-turn on stock Grok (Windows) | **No** â€” not performed; optional T6 later |
+| Live authenticated multi-turn on stock Grok (Windows) | **No** — not performed; optional T6 later |
 
 ## 8. Unresolved assumptions
 
@@ -359,7 +361,7 @@ Future-only sections are labeled as such in IA, vertical slice, and test strateg
 | W0-C merge | `eb9c7b14df3949b684c049e21444cbd102236e15` |
 | W0-D merge | `1cdf3383febbe6e289f664b4d0d4c33bc961dbea` |
 | Gate 0 artifacts commit | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
-| **Final `main` tip after FF** | `58db0891cfc966c02e7a6f581fee2aa097e46513` (pre close-table commit; see Â§16 for tip after SHA table refresh) |
+| **Final `main` tip** | Use `git rev-parse main` after this encoding-clean close commit (recorded in §16) |
 
 ## 13. Validation checklist
 
@@ -376,8 +378,8 @@ Future-only sections are labeled as such in IA, vertical slice, and test strateg
 | 9 | Required W0-D three testing docs + specifications tree | Pass |
 | 10 | Completion reports for A/B/C/D present | Pass |
 | 11 | Markdown links practical (relative docs paths) | Pass |
-| 12 | No fixed machine paths in docs/fixtures (except â€œdo not useâ€ examples) | Pass â€” see scan commands |
-| 13 | No secrets/credentials/private prompts/tokens | Pass â€” see scan commands |
+| 12 | No fixed machine paths in docs/fixtures (except "do not use" examples) | Pass — see scan commands |
+| 13 | No secrets/credentials/private prompts/tokens | Pass — see scan commands |
 | 14 | Synthetic fixtures labeled | Pass (`tests/fixtures/acp/README.md`, catalog, strategy) |
 | 15 | `repos/grok-build` clean | Pass |
 | 16 | No Wave 1 application source scaffolding | Pass (docs/specs only) |
@@ -407,7 +409,7 @@ git merge-base --is-ancestor 977ddee HEAD
 git -C ../grok-build status -sb
 ```
 
-**Scan interpretation (2026-07-17):** Absolute path hits only in docs explaining not to use fixed `D:\` / `/Users/` paths. Secret-like hits are policy, env var **names**, fixture usage metadata, or scrubbed examples â€” no committed credentials.
+**Scan interpretation (2026-07-17):** Absolute path hits only in docs explaining not to use fixed `D:\` / `/Users/` paths. Secret-like hits are policy, env var **names**, fixture usage metadata, or scrubbed examples — no committed credentials.
 
 ## 14. Files changed by this final integration task
 
@@ -432,18 +434,16 @@ git -C ../grok-build status -sb
 - Did not rewrite frozen W0-A contracts  
 - Did not use headless/watchdog worker scripts  
 
-## 16. Close table (filled at finalize)
+## 16. Close table
 
 | Field | Value |
 |---|---|
 | W0-C merge | `eb9c7b14df3949b684c049e21444cbd102236e15` |
 | W0-D merge | `1cdf3383febbe6e289f664b4d0d4c33bc961dbea` |
 | Gate 0 artifacts commit | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
-| Final main tip after FF (artifacts) | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
-| Close-table refresh commit | `cb09ca0270e5853dc303005403a29053836f45a1` (content); tip after finalize: `e89eb6186a2a3b8bc983fb94a9ea9bf8f2343818` |
-| Ahead of `origin/main` | 21 commits at artifacts FF; +1 after close-table refresh |
-| Lease released | Yes â€” session `heli-ses-7c2f27d1-a702-4c12-b07f-9962714c8c09` |
-| Session closed | Yes |
+| Encoding-clean report commit | Recorded as the commit that rewrites this section without mojibake; tip = `git rev-parse main` after that commit |
+| Ahead of `origin/main` | Local only; not pushed |
+| Lease released | Yes (integration session closed; fix session closed after this commit) |
 | Pushed | **No** |
 
 ## 17. Recommended first Wave 1 launch group
@@ -462,8 +462,8 @@ See `docs/integration/WAVE_1_READINESS_MATRIX.md`. Summary:
 **Then integrate:**
 
 7. **W1-D** ACP Client and Runtime Adapter (depends on B + G fixtures; process API from C)  
-8. **W1-F** Control Plane Integration (depends on Bâ€“E + D)
+8. **W1-F** Control Plane Integration (depends on B–E + D)
 
 ---
 
-**Document control:** Final Gate 0 artifact. Update Â§16 SHAs only when main is fast-forwarded and lease released.
+**Document control:** Final Gate 0 artifact. Gate 0 decision is PASS; Wave 1 is authorized but not started by this task.

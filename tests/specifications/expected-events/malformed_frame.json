@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "malformed_frame",
+  "evidence": "fake-runtime",
+  "orderedTypeConstraints": [
+    { "type": "adapter.protocol.error", "min": 1 }
+  ],
+  "optionalFollowOn": {
+    "ifProcessAlive": "session_may_continue",
+    "ifTransportDead": {
+      "anyOf": [
+        { "type": "runtime.process.exited", "min": 1 },
+        { "type": "runtime.process.failed", "min": 1 }
+      ]
+    }
+  },
+  "forbiddenBehaviors": [
+    "ui_process_crash",
+    "silent_ignore_without_event"
+  ]
+}

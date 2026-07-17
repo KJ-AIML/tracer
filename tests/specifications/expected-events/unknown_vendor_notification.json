@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "unknown_vendor_notification",
+  "evidence": "synthetic",
+  "description": "Vendor-extension compatibility: unmapped x.ai/* or unknown method becomes adapter.protocol.unknown; does not fail MVP.",
+  "orderedTypeConstraints": [
+    { "type": "adapter.protocol.unknown", "min": 1 }
+  ],
+  "mustContinueSession": true,
+  "forbiddenBehaviors": [
+    "require_ui_to_parse_vendor_frame",
+    "kill_process_solely_for_unknown_vendor_notification"
+  ],
+  "contractVsVendor": "vendor-extension-compatibility"
+}

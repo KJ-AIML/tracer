@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "slow_cancel_ack",
+  "evidence": "fake-runtime",
+  "description": "Cancel ack delayed past T_cancel; force kill path; Windows Job Object / kill-tree coverage in T5.",
+  "orderedTypeConstraints": [
+    { "type": "session.prompt.submitted", "min": 1 },
+    {
+      "type": "session.status.changed",
+      "min": 0,
+      "payloadToIn": ["cancelling"]
+    },
+    {
+      "type": "runtime.process.exited",
+      "min": 1
+    }
+  ],
+  "terminalWithinMs": {
+    "from": "cancel_invoked",
+    "budget": "T_cancel_ms + T_term_ms",
+    "hardFailIfExceeded": true
+  },
+  "platformNotes": {
+    "windows": "Job Object kill-on-close or equivalent kill-tree required",
+    "unix": "process group / setsid kill on force path"
+  },
+  "orphanCheck": true,
+  "failureIds": ["F-C02", "F-P10", "F-P11"]
+}

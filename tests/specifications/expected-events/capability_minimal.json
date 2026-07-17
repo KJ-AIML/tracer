@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "capability_minimal",
+  "evidence": "fake-runtime",
+  "capabilities": {
+    "promptStreaming": false,
+    "cancellation": true,
+    "planUpdates": false,
+    "toolCalls": false,
+    "approvals": false,
+    "fileChangeNotifications": false,
+    "terminalOutput": false
+  },
+  "orderedTypeConstraints": [
+    {
+      "type": "runtime.process.ready",
+      "min": 1,
+      "payloadRequires": ["capabilities"]
+    },
+    { "type": "session.prompt.submitted", "min": 1 },
+    { "type": "agent.message.completed", "min": 1 }
+  ],
+  "forbiddenTypes": [
+    "agent.plan.updated",
+    "terminal.output"
+  ],
+  "notes": [
+    "When promptStreaming is false, adapter may synthesize a single agent.message.completed",
+    "Do not synthesize fake plans when planUpdates is false"
+  ]
+}

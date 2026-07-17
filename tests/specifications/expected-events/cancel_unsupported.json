@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "cancel_unsupported",
+  "evidence": "fake-runtime",
+  "capabilities": {
+    "cancellation": false
+  },
+  "orderedTypeConstraints": [
+    { "type": "runtime.process.ready", "min": 1 },
+    { "type": "session.prompt.submitted", "min": 1 }
+  ],
+  "cooperativeCancel": {
+    "mustFailOrSkip": true,
+    "errorClassAnyOf": ["CapabilityUnsupported"]
+  },
+  "fallback": {
+    "processStop": true,
+    "expectEvents": [
+      {
+        "anyOf": [
+          { "type": "session.cancelled", "min": 1 },
+          {
+            "type": "session.status.changed",
+            "payloadToIn": ["stopped", "cancelled"]
+          }
+        ]
+      },
+      {
+        "type": "runtime.process.exited",
+        "min": 1
+      }
+    ]
+  },
+  "orphanCheck": true,
+  "forbiddenBehaviors": [
+    "claim_cooperative_cancel_succeeded_when_unsupported"
+  ]
+}

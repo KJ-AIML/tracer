@@ -1,0 +1,82 @@
+# Minimal CI matrix specification (Wave 0)
+# Implement workflows in Wave 1 infra; this file is the policy contract.
+
+schemaVersion: 1
+
+policy:
+  standardCiMustNot:
+    - network_model_providers
+    - paid_api_keys_for_success
+    - require_stock_grok_binary
+    - treat_synthetic_fixtures_as_live_parity
+  standardCiMust:
+    - run_fake_acp_scenarios
+    - assert_w0a_event_type_strings
+    - validate_acp_fixtures_parse
+
+jobs:
+  - id: ci-rust
+    standardCi: true
+    os: [linux]
+    includesTiers: [unit, contract, fake, storage]
+    forbids: [live]
+    notes: cargo test workspace / scoped crates with fake ACP
+
+  - id: ci-frontend
+    standardCi: true
+    os: [linux]
+    includesTiers: [unit, ui]
+    forbids: [live]
+    notes: vitest/testing-library; normalized event fixtures only
+
+  - id: ci-fixtures
+    standardCi: true
+    os: [linux]
+    includesTiers: [contract]
+    forbids: [live]
+    notes: >
+      Validate tests/fixtures/acp schema + tests/specifications expected-events
+      against event catalog rules
+
+  - id: ci-windows-process
+    standardCi: false
+    recommended: true
+    os: [windows]
+    includesTiers: [platform, fake]
+    scenarios:
+      - clean_shutdown_stdin_close
+      - slow_cancel_ack
+      - crash_nonzero_exit
+      - cancel_while_permission_pending
+    notes: Job Object / orphan matrix
+
+  - id: ci-macos-process
+    standardCi: false
+    os: [macos]
+    includesTiers: [platform, fake]
+    notes: process group kill coverage when runners available
+
+  - id: live-smoke
+    standardCi: false
+    os: [linux, windows, macos]
+    includesTiers: [live]
+    mayConsumeProviderUsage: true
+    envGate: TRACER_LIVE_SMOKE=1
+    scenarios:
+      - live_stock_auth_prompt
+      - live_stock_auth_required_reprobe
+    notes: secrets via CI secret store only; never commit credentials
+
+  - id: desktop-e2e
+    standardCi: false
+    includesTiers: [e2e]
+    notes: after Gate 1 baseline; prefer fake runtime
+
+scenarioSelection:
+  pullRequest:
+    requireAllStandardCiScenarios: true
+    catalogFilter:
+      standardCi: true
+      mayConsumeProviderUsage: false
+  nightlyOptional:
+    include: [ci-windows-process, live-smoke]

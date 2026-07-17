@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "permission_deny",
+  "evidence": "fake-runtime",
+  "orderedTypeConstraints": [
+    { "type": "approval.requested", "min": 1 },
+    {
+      "type": "approval.resolved",
+      "min": 1,
+      "payloadDecisionIn": ["deny"]
+    },
+    {
+      "anyOf": [
+        { "type": "tool.failed", "min": 1 },
+        {
+          "type": "tool.updated",
+          "min": 1,
+          "payloadStatusIn": ["failed", "cancelled"]
+        }
+      ]
+    }
+  ],
+  "forbiddenTypesAsSuccess": ["session.completed"],
+  "forbiddenBehaviors": [
+    "auto_approve_unknown_risk",
+    "claim_tool_success_after_deny"
+  ],
+  "failClosed": true
+}

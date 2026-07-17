@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "happy_prompt_stream",
+  "evidence": "fake-runtime",
+  "description": "Normalized W0-A event expectations for happy path. Sequence numbers assigned by control plane at runtime; order constraints below are relative.",
+  "envelopeRules": {
+    "eventVersion": 1,
+    "requireFields": [
+      "eventId",
+      "sequence",
+      "timestamp",
+      "projectId",
+      "sessionId",
+      "agentRunId",
+      "type",
+      "payload"
+    ],
+    "sequence": "monotonic_plus_one_per_session"
+  },
+  "orderedTypeConstraints": [
+    { "type": "session.created", "min": 1 },
+    { "type": "runtime.process.started", "min": 1 },
+    { "type": "runtime.process.ready", "min": 1, "payloadRequires": ["capabilities"] },
+    { "type": "session.ready", "min": 1 },
+    { "type": "session.prompt.submitted", "min": 1 },
+    {
+      "anyOf": [
+        { "type": "agent.message.delta", "min": 1 },
+        { "type": "agent.message.completed", "min": 1 }
+      ]
+    },
+    { "type": "tool.started", "min": 0, "note": "optional if scenario emits tools" },
+    { "type": "tool.completed", "min": 0 },
+    {
+      "anyOf": [
+        { "type": "session.completed", "min": 1 },
+        {
+          "type": "session.status.changed",
+          "min": 1,
+          "payloadToIn": ["ready", "completed"]
+        }
+      ]
+    },
+    {
+      "type": "runtime.process.exited",
+      "min": 1,
+      "when": "after_stop",
+      "payloadExpected": { "expected": true }
+    }
+  ],
+  "forbiddenTypesAfterExit": ["session.prompt.submitted"],
+  "assertNormativeNamesOnly": true,
+  "forbiddenProductTypeAliases": [
+    "message.agent.delta",
+    "permission.requested",
+    "turn.started",
+    "runtime.initialized"
+  ]
+}

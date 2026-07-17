@@ -4415,6 +4415,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracer-vs1-soak"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "time",
+ "tokio",
+ "tracer-control-plane",
+ "tracer-domain",
+ "tracer-storage",
+ "uuid",
+]
+
+[[package]]
+name = "tracer-vs1-stress"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracer-control-plane",
+ "tracer-domain",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"

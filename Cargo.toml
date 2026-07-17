@@ -10,6 +10,8 @@ members = [
   "crates/tracer-control-plane",
   "apps/desktop/src-tauri",
   "tests/integration/storage",
+  "tests/soak",
+  "tests/stress",
 ]
 
 [workspace.package]

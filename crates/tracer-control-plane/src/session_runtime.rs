@@ -22,7 +22,7 @@
 //! lock is held across long-running adapter RPCs.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver as StdReceiver, Sender as StdSender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -47,7 +47,81 @@ use crate::types::{PendingApprovalView, PresentationEvent};
 
 /// Bounded internal handoff between OS drain and async persist pump.
 /// Keeps adapter drain continuous while preventing unbounded->unbounded growth.
-const BRIDGE_CAPACITY: usize = 256;
+///
+/// Exported for soak/stress tests that size bursts relative to bridge capacity.
+pub const BRIDGE_CAPACITY: usize = 256;
+
+/// Observability counters for the dual-stage ingest path (soak / diagnostics).
+///
+/// Counters are best-effort and do not affect control flow. Used by VS1-H3 soak
+/// to measure drain throughput, persist success, and presentation fan-out without
+/// redesigning the control plane.
+#[derive(Debug, Default)]
+pub struct IngestMetrics {
+    /// Adapter events accepted into the bounded bridge (`blocking_send` ok).
+    pub bridge_accepted: AtomicU64,
+    /// `blocking_send` failures (bridge closed / receiver dropped).
+    pub bridge_send_failures: AtomicU64,
+    /// Events successfully appended to SQLite.
+    pub events_persisted: AtomicU64,
+    /// Duplicate event_id ignored by storage.
+    pub events_duplicate: AtomicU64,
+    /// Persist failures (non-duplicate).
+    pub persist_errors: AtomicU64,
+    /// Presentation fan-out send attempts after successful persist.
+    pub presentation_sends: AtomicU64,
+    /// Presentation fan-out send failures (disconnected consumer).
+    pub presentation_send_failures: AtomicU64,
+}
+
+impl IngestMetrics {
+    /// Snapshot for tests / soak reports.
+    pub fn snapshot(&self) -> IngestMetricsSnapshot {
+        IngestMetricsSnapshot {
+            bridge_accepted: self.bridge_accepted.load(Ordering::Relaxed),
+            bridge_send_failures: self.bridge_send_failures.load(Ordering::Relaxed),
+            events_persisted: self.events_persisted.load(Ordering::Relaxed),
+            events_duplicate: self.events_duplicate.load(Ordering::Relaxed),
+            persist_errors: self.persist_errors.load(Ordering::Relaxed),
+            presentation_sends: self.presentation_sends.load(Ordering::Relaxed),
+            presentation_send_failures: self.presentation_send_failures.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// Owned snapshot of [`IngestMetrics`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct IngestMetricsSnapshot {
+    /// See [`IngestMetrics::bridge_accepted`].
+    pub bridge_accepted: u64,
+    /// See [`IngestMetrics::bridge_send_failures`].
+    pub bridge_send_failures: u64,
+    /// See [`IngestMetrics::events_persisted`].
+    pub events_persisted: u64,
+    /// See [`IngestMetrics::events_duplicate`].
+    pub events_duplicate: u64,
+    /// See [`IngestMetrics::persist_errors`].
+    pub persist_errors: u64,
+    /// See [`IngestMetrics::presentation_sends`].
+    pub presentation_sends: u64,
+    /// See [`IngestMetrics::presentation_send_failures`].
+    pub presentation_send_failures: u64,
+}
+
+/// Optional artificial persist delay for soak "slow database" injection.
+///
+/// Set env `TRACER_SOAK_PERSIST_DELAY_MS` to a positive integer. Production
+/// paths leave this unset (zero delay). Not a production SLA hook.
+///
+/// Read on each persist so soak tests can toggle mid-process (no OnceLock).
+fn soak_persist_delay() -> Duration {
+    std::env::var("TRACER_SOAK_PERSIST_DELAY_MS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|ms| *ms > 0)
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::ZERO)
+}
 
 /// Shared mutable session runtime state (not held across adapter RPCs for cancel).
 #[derive(Debug)]
@@ -95,6 +169,8 @@ pub struct LiveSession {
     pub project_id: tracer_storage::ProjectId,
     pub adapter: Arc<RuntimeAdapter>,
     pub state: Arc<Mutex<SessionRuntimeState>>,
+    /// Dual-stage ingest counters (soak / diagnostics).
+    pub metrics: Arc<IngestMetrics>,
     stop_ingest: Arc<AtomicBool>,
     drain_join: Mutex<Option<JoinHandle<()>>>,
     pump_abort: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -112,6 +188,7 @@ impl LiveSession {
             project_id,
             adapter,
             state: Arc::new(Mutex::new(SessionRuntimeState::new())),
+            metrics: Arc::new(IngestMetrics::default()),
             stop_ingest: Arc::new(AtomicBool::new(false)),
             drain_join: Mutex::new(None),
             pump_abort: Mutex::new(None),
@@ -141,11 +218,12 @@ impl LiveSession {
         let (bridge_tx, bridge_rx) = tokio_channel::<AdapterEvent>(BRIDGE_CAPACITY);
         let stop = Arc::clone(&self.stop_ingest);
         let sid = self.session_id;
+        let metrics_drain = Arc::clone(&self.metrics);
 
         let drain = thread::Builder::new()
             .name(format!("cp-drain-{}", sid))
             .spawn(move || {
-                drain_adapter(adapter_rx, bridge_tx, stop, sid);
+                drain_adapter(adapter_rx, bridge_tx, stop, sid, metrics_drain);
             })
             .expect("spawn drain");
         *self.drain_join.lock().expect("join") = Some(drain);
@@ -155,8 +233,19 @@ impl LiveSession {
         let adapter = Arc::clone(&self.adapter);
         let stop2 = Arc::clone(&self.stop_ingest);
         let storage = storage.clone();
+        let metrics_pump = Arc::clone(&self.metrics);
         let pump = tokio::spawn(async move {
-            async_persist_pump(bridge_rx, stop2, state, sid, storage, fanout, adapter).await;
+            async_persist_pump(
+                bridge_rx,
+                stop2,
+                state,
+                sid,
+                storage,
+                fanout,
+                adapter,
+                metrics_pump,
+            )
+            .await;
         });
         *self.pump_abort.lock().expect("pump") = Some(pump);
     }
@@ -202,14 +291,21 @@ fn drain_adapter(
     tx: TokioSender<AdapterEvent>,
     stop: Arc<AtomicBool>,
     session_id: SessionId,
+    metrics: Arc<IngestMetrics>,
 ) {
     debug!(session = %session_id, "adapter drain started");
     loop {
         if stop.load(Ordering::SeqCst) {
             // Best-effort non-blocking flush on stop.
             while let Ok(ev) = rx.try_recv() {
-                if tx.try_send(ev).is_err() {
-                    break;
+                match tx.try_send(ev) {
+                    Ok(()) => {
+                        metrics.bridge_accepted.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(_) => {
+                        metrics.bridge_send_failures.fetch_add(1, Ordering::Relaxed);
+                        break;
+                    }
                 }
             }
             break;
@@ -219,11 +315,24 @@ fn drain_adapter(
                 // blocking_send applies backpressure without Handle::block_on.
                 // On stop, try_send to avoid hanging if the pump is full.
                 if stop.load(Ordering::SeqCst) {
-                    let _ = tx.try_send(ev);
+                    match tx.try_send(ev) {
+                        Ok(()) => {
+                            metrics.bridge_accepted.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Err(_) => {
+                            metrics.bridge_send_failures.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                     break;
                 }
-                if tx.blocking_send(ev).is_err() {
-                    break;
+                match tx.blocking_send(ev) {
+                    Ok(()) => {
+                        metrics.bridge_accepted.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(_) => {
+                        metrics.bridge_send_failures.fetch_add(1, Ordering::Relaxed);
+                        break;
+                    }
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -242,6 +351,7 @@ async fn async_persist_pump(
     storage: SqliteStorage,
     fanout: Arc<Mutex<Option<StdSender<PresentationEvent>>>>,
     adapter: Arc<RuntimeAdapter>,
+    metrics: Arc<IngestMetrics>,
 ) {
     debug!(session = %session_id, "async persist pump started");
     loop {
@@ -250,10 +360,10 @@ async fn async_persist_pump(
             maybe = rx.recv() => {
                 match maybe {
                     Some(ev) => {
-                        persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
+                        persist_one(&ev, &state, session_id, &storage, &fanout, &adapter, &metrics).await;
                         // Drain any already-queued events without yielding extra.
                         while let Ok(ev) = rx.try_recv() {
-                            persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
+                            persist_one(&ev, &state, session_id, &storage, &fanout, &adapter, &metrics).await;
                         }
                     }
                     None => break,
@@ -262,7 +372,7 @@ async fn async_persist_pump(
             _ = tokio::time::sleep(Duration::from_millis(50)), if stop.load(Ordering::SeqCst) => {
                 // Stop requested: finish remaining then exit.
                 while let Ok(ev) = rx.try_recv() {
-                    persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
+                    persist_one(&ev, &state, session_id, &storage, &fanout, &adapter, &metrics).await;
                 }
                 if rx.is_empty() {
                     break;
@@ -280,6 +390,7 @@ async fn persist_one(
     storage: &SqliteStorage,
     fanout: &Arc<Mutex<Option<StdSender<PresentationEvent>>>>,
     adapter: &RuntimeAdapter,
+    metrics: &IngestMetrics,
 ) {
     match ev {
         AdapterEvent::Error(err) => {
@@ -298,8 +409,15 @@ async fn persist_one(
                 .unwrap_or_default();
             let record = envelope_to_event_record(env);
 
+            // Soak-only artificial latency (TRACER_SOAK_PERSIST_DELAY_MS).
+            let delay = soak_persist_delay();
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
+
             match storage.append_event(record).await {
                 Ok(stored) => {
+                    metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
                     let envelope_json = stored.to_envelope_json();
                     let seq = stored.sequence;
                     {
@@ -316,29 +434,104 @@ async fn persist_one(
                     }
                     if let Ok(g) = fanout.lock() {
                         if let Some(tx) = g.as_ref() {
-                            let _ = tx.send(PresentationEvent {
-                                batch: false,
-                                events: vec![envelope_json],
-                            });
+                            metrics.presentation_sends.fetch_add(1, Ordering::Relaxed);
+                            if tx
+                                .send(PresentationEvent {
+                                    batch: false,
+                                    events: vec![envelope_json],
+                                })
+                                .is_err()
+                            {
+                                metrics
+                                    .presentation_send_failures
+                                    .fetch_add(1, Ordering::Relaxed);
+                            }
                         }
                     }
                     let status_now = state.lock().expect("state").status;
                     let _ = storage.update_session_status(&session_id, status_now).await;
                 }
-                Err(tracer_storage::StorageError::AlreadyExists { .. }) => {
-                    debug!(session = %session_id, "duplicate event ignored");
-                    let mut st = state.lock().expect("state");
-                    apply_event_to_state(
-                        &mut st,
-                        &event_type,
-                        &payload,
-                        &session_id.to_string(),
-                        &ts,
+                Err(tracer_storage::StorageError::AlreadyExists { entity, id }) => {
+                    // Under burst load SQLite may surface UNIQUE on (session_id, sequence)
+                    // when next_sequence is briefly contended. Retry once with a fresh
+                    // storage event_id; append_event re-reads next_sequence each call.
+                    warn!(
+                        session = %session_id,
+                        entity = %entity,
+                        id = %id,
+                        "persist unique conflict; retrying once"
                     );
-                    st.auth_state = adapter.auth_state();
+                    let retry = envelope_to_event_record(env);
+                    match storage.append_event(retry).await {
+                        Ok(stored) => {
+                            metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
+                            let envelope_json = stored.to_envelope_json();
+                            let seq = stored.sequence;
+                            {
+                                let mut st = state.lock().expect("state");
+                                st.latest_sequence = seq;
+                                apply_event_to_state(
+                                    &mut st,
+                                    &event_type,
+                                    &payload,
+                                    &session_id.to_string(),
+                                    &ts,
+                                );
+                                st.auth_state = adapter.auth_state();
+                            }
+                            if let Ok(g) = fanout.lock() {
+                                if let Some(tx) = g.as_ref() {
+                                    metrics.presentation_sends.fetch_add(1, Ordering::Relaxed);
+                                    if tx
+                                        .send(PresentationEvent {
+                                            batch: false,
+                                            events: vec![envelope_json],
+                                        })
+                                        .is_err()
+                                    {
+                                        metrics
+                                            .presentation_send_failures
+                                            .fetch_add(1, Ordering::Relaxed);
+                                    }
+                                }
+                            }
+                            let status_now = state.lock().expect("state").status;
+                            let _ = storage.update_session_status(&session_id, status_now).await;
+                        }
+                        Err(tracer_storage::StorageError::AlreadyExists { entity, id }) => {
+                            // True duplicate (or unrecoverable sequence stall): apply state only.
+                            debug!(
+                                session = %session_id,
+                                entity = %entity,
+                                id = %id,
+                                "duplicate event ignored after retry"
+                            );
+                            metrics.events_duplicate.fetch_add(1, Ordering::Relaxed);
+                            let mut st = state.lock().expect("state");
+                            apply_event_to_state(
+                                &mut st,
+                                &event_type,
+                                &payload,
+                                &session_id.to_string(),
+                                &ts,
+                            );
+                            st.auth_state = adapter.auth_state();
+                        }
+                        Err(e) => {
+                            warn!(session = %session_id, error = %e, "persist retry failed");
+                            metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
+                            let mut st = state.lock().expect("state");
+                            st.persist_failed = true;
+                            st.last_error = Some(serde_json::json!({
+                                "errorClass": "StorageError",
+                                "message": e.to_string(),
+                            }));
+                        }
+                    }
                 }
                 Err(e) => {
                     warn!(session = %session_id, error = %e, "persist failed");
+                    metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
                     let mut st = state.lock().expect("state");
                     st.persist_failed = true;
                     st.last_error = Some(serde_json::json!({

@@ -1,0 +1,19 @@
+{
+  "name": "@tracer/test-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scenario catalog, expected-event packs, and provenance helpers for Tracer tests (W1-G).",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./catalog": "./src/catalog.js",
+    "./expected-events": "./src/expected-events.js",
+    "./provenance": "./src/provenance.js",
+    "./paths": "./src/paths.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

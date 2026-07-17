@@ -1,18 +1,18 @@
 [package]
 name = "tracer-domain"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "Tracer domain types and Event Protocol v1 envelope (W1-B)"
-license = "MIT OR Apache-2.0"
-rust-version = "1.75"
-publish = false
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-uuid = { version = "1", features = ["serde", "v4"] }
-thiserror = "2"
-time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = "1"
+pretty_assertions = { workspace = true }

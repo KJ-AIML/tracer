@@ -1,0 +1,18 @@
+{
+  "name": "tracer",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "test:fake-runtime": "pnpm --filter @tracer/contract-fake-runtime test",
+    "test:event-types": "pnpm --filter @tracer/event-types test",
+    "test:ui": "pnpm --filter @tracer/ui test",
+    "test:desktop": "pnpm --filter @tracer/desktop test",
+    "validate:js": "pnpm -r run build && pnpm -r run test"
+  }
+}

@@ -1,8 +1,8 @@
 [package]
 name = "tracer-storage-integration"
 version = "0.1.0"
-edition = "2021"
-publish = false
+edition.workspace = true
+publish.workspace = true
 description = "Integration tests for tracer-storage (VS-10 / F-S*)"
 
 [[test]]
@@ -10,8 +10,8 @@ name = "vs10_persistence_reload"
 path = "src/vs10_persistence_reload.rs"
 
 [dependencies]
-tracer-storage = { path = "../../../crates/tracer-storage" }
-serde_json = "1"
-tempfile = "3"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracer-storage = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }

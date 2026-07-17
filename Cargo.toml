@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/tracer-domain",
+  "crates/tracer-process",
+  "crates/tracer-storage",
+  "crates/tracer-heli",
+  "apps/desktop/src-tauri",
+  "tests/integration/storage",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.77"
+publish = false
+
+[workspace.dependencies]
+# Shared versions for Wave 1 foundation crates
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde", "v4"] }
+thiserror = "2"
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
+pretty_assertions = "1"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs"] }
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio",
+  "sqlite",
+  "migrate",
+  "macros",
+] }
+tracing = "0.1"
+async-trait = "0.1"
+
+# Path members (for inter-crate deps)
+tracer-domain = { path = "crates/tracer-domain" }
+tracer-process = { path = "crates/tracer-process" }
+tracer-storage = { path = "crates/tracer-storage" }
+tracer-heli = { path = "crates/tracer-heli" }

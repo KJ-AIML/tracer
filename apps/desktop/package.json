@@ -15,7 +15,8 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@tracer/ui": "file:../../packages/ui",
+    "@tracer/event-types": "workspace:*",
+    "@tracer/ui": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

@@ -358,8 +358,8 @@ Future-only sections are labeled as such in IA, vertical slice, and test strateg
 | Main at integration start | `5b936412b982cc4310f1196caef023a968ea070a` |
 | W0-C merge | `eb9c7b14df3949b684c049e21444cbd102236e15` |
 | W0-D merge | `1cdf3383febbe6e289f664b4d0d4c33bc961dbea` |
-| Gate 0 artifacts commit | *(recorded after commit; see §16 close table)* |
-| **Final `main` tip after FF** | *(recorded after `git merge --ff-only`; see §16)* |
+| Gate 0 artifacts commit | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
+| **Final `main` tip after FF** | `58db0891cfc966c02e7a6f581fee2aa097e46513` (pre close-table commit; see §16 for tip after SHA table refresh) |
 
 ## 13. Validation checklist
 
@@ -436,11 +436,14 @@ git -C ../grok-build status -sb
 
 | Field | Value |
 |---|---|
-| Gate 0 artifacts commit | *(fill after commit)* |
-| Final main tip after FF | *(fill after FF)* |
-| Ahead of `origin/main` | *(fill)* |
-| Lease released | *(fill)* |
-| Session closed | *(fill)* |
+| W0-C merge | `eb9c7b14df3949b684c049e21444cbd102236e15` |
+| W0-D merge | `1cdf3383febbe6e289f664b4d0d4c33bc961dbea` |
+| Gate 0 artifacts commit | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
+| Final main tip after FF (artifacts) | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
+| Close-table refresh commit | See `git rev-parse main` after this commit lands |
+| Ahead of `origin/main` | 21 commits at artifacts FF; +1 after close-table refresh |
+| Lease released | Yes — session `heli-ses-7c2f27d1-a702-4c12-b07f-9962714c8c09` |
+| Session closed | Yes |
 | Pushed | **No** |
 
 ## 17. Recommended first Wave 1 launch group

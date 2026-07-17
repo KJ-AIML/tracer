@@ -671,3 +671,85 @@ fn soak_thresholds_documented() {
     assert_eq!(thresholds::MAX_UNJOINED_OWNED_TASKS, 0);
     assert!(thresholds::BURST_CHUNK_COUNT as usize > BRIDGE_CAPACITY);
 }
+
+// ---------------------------------------------------------------------------
+// SOAK-07 Sticky persist_failed must not poison later sessions
+// ---------------------------------------------------------------------------
+// Invariant: `persist_failed` lives on per-LiveSession SessionRuntimeState.
+// Stopping/removing a session discards that flag. A subsequent session on the
+// same ControlPlane + file DB must start clean (persist_failed=false) and
+// complete prompts without inheriting a prior session's StorageError sticky bit.
+// Within a single live session, the flag remains sticky after a true persist
+// error until session teardown (fail-closed: no false session.completed claim).
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn soak07_persist_failed_does_not_poison_later_sessions() {
+    let _g = soak_lock().await;
+    std::env::remove_var("TRACER_SOAK_PERSIST_DELAY_MS");
+    std::env::remove_var("TRACER_SOAK_SCENARIO");
+
+    let t0 = Instant::now();
+    let (_keep, cp, _db) = open_file_cp().await;
+    let (_proj_dir, project_id) = register_project(&cp).await;
+
+    // Session A: normal stock run then stop (removes live state including any sticky flag).
+    let a = cp
+        .session_create(
+            &project_id,
+            Some("soak07-a".into()),
+            stock_opts("happy_prompt_stream"),
+        )
+        .await
+        .expect("session A create");
+    let _ = cp.session_submit_prompt(&a.session_id, "session A").await;
+    let _ = cp.session_stop(&a.session_id, false).await.expect("stop A");
+    assert!(
+        cp.runtime_status(Some(&a.session_id)).unwrap().is_empty(),
+        "session A must leave live registry so sticky state cannot linger"
+    );
+
+    // Session B: independent live state; must succeed with clean metrics.
+    let b = cp
+        .session_create(
+            &project_id,
+            Some("soak07-b".into()),
+            stock_opts("happy_prompt_stream"),
+        )
+        .await
+        .expect("session B create");
+    assert!(b.session_ready);
+    let prompt_b = cp
+        .session_submit_prompt(&b.session_id, "session B after A")
+        .await;
+    assert!(
+        prompt_b.is_ok(),
+        "later session must not inherit sticky persist_failed: {:?}",
+        prompt_b.err().map(|e| e.to_command_error())
+    );
+
+    let events_b = cp
+        .events_list(&b.session_id, 0, 500)
+        .await
+        .expect("events B")
+        .events;
+    assert!(
+        has_type(&events_b, "session.completed")
+            || has_type(&events_b, "agent.message.delta")
+            || has_type(&events_b, "agent.message.completed")
+            || has_type(&events_b, "session.prompt.submitted"),
+        "session B needs stream/terminal evidence: {:?}",
+        event_types(&events_b)
+    );
+    if let Some(m) = cp.session_ingest_metrics(&b.session_id) {
+        assert_eq!(
+            m.persist_errors, 0,
+            "session B must not start with inherited persist_errors"
+        );
+    }
+
+    let _ = cp.session_stop(&b.session_id, false).await.expect("stop B");
+    eprintln!(
+        "[soak07_persist_failed_isolation] pass=true duration_ms={}",
+        t0.elapsed().as_millis()
+    );
+}

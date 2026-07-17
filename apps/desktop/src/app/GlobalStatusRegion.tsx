@@ -1,13 +1,14 @@
 import type { ReactElement } from "react";
 import { Banner, Button } from "@tracer/ui";
-import type { GlobalBannerKind } from "../shared/store/mockStore";
+import type { GlobalBannerKind } from "../shared/store/snapshotStore";
 
 interface Props {
   banner: GlobalBannerKind;
+  heliSummary?: string;
   onDismiss: () => void;
 }
 
-export function GlobalStatusRegion({ banner, onDismiss }: Props): ReactElement | null {
+export function GlobalStatusRegion({ banner, heliSummary, onDismiss }: Props): ReactElement | null {
   if (banner === "none") return null;
 
   if (banner === "runtime_missing") {
@@ -23,8 +24,8 @@ export function GlobalStatusRegion({ banner, onDismiss }: Props): ReactElement |
         }
       >
         <p>
-          Install or configure the ACP runtime. Configure path is a control-plane concern (W1-F); this
-          is a shell placeholder.
+          Install or configure the ACP runtime. Path configuration is a control-plane concern; the
+          shell only displays the typed failure state.
         </p>
       </Banner>
     );
@@ -47,6 +48,26 @@ export function GlobalStatusRegion({ banner, onDismiss }: Props): ReactElement |
     );
   }
 
+  if (banner === "heli_unavailable") {
+    return (
+      <Banner
+        severity="info"
+        title="Heli workspace unavailable"
+        live="polite"
+        actions={
+          <Button variant="ghost" onClick={onDismiss}>
+            Dismiss
+          </Button>
+        }
+      >
+        <p>
+          {heliSummary ?? "Heli was not detected."} Tracer continues without Heli coordination — this is
+          not a fatal error.
+        </p>
+      </Banner>
+    );
+  }
+
   return (
     <Banner
       severity="error"
@@ -58,7 +79,7 @@ export function GlobalStatusRegion({ banner, onDismiss }: Props): ReactElement |
         </Button>
       }
     >
-      <p>Invoke failures against the local control plane. Retry later or check W1-F wiring.</p>
+      <p>Invoke failures against the local control plane. Retry later or check desktop command wiring.</p>
     </Banner>
   );
 }

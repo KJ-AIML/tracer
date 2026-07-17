@@ -1,11 +1,11 @@
 import type { Dispatch, ReactElement, ReactNode } from "react";
 import { Button } from "@tracer/ui";
-import type { MockAction, MockState } from "../shared/store/mockStore";
+import type { AppAction, AppViewState } from "../shared/store/snapshotStore";
 import { GlobalStatusRegion } from "./GlobalStatusRegion";
 
 interface Props {
-  state: MockState;
-  dispatch: Dispatch<MockAction>;
+  state: AppViewState;
+  dispatch: Dispatch<AppAction>;
   children: ReactNode;
 }
 
@@ -16,7 +16,7 @@ export function AppShell({ state, dispatch, children }: Props): ReactElement {
         <div className="layout-row">
           <span className="app-shell__brand">Tracer</span>
           {state.demoRuntime ? (
-            <span className="demo-badge" title="Synthetic mock store — not live model output">
+            <span className="demo-badge" title="Mock command backend — not live model output">
               Demo runtime · not live model output
             </span>
           ) : null}
@@ -49,6 +49,7 @@ export function AppShell({ state, dispatch, children }: Props): ReactElement {
       <div className="app-shell__global" aria-label="Global status">
         <GlobalStatusRegion
           banner={state.globalBanner}
+          heliSummary={state.heli.summary}
           onDismiss={() => dispatch({ type: "setGlobalBanner", banner: "none" })}
         />
       </div>

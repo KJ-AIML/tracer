@@ -1,3 +1,7 @@
+/**
+ * Legacy mockStore helpers retained for presentation matrix pure functions.
+ * Journey ownership moved to snapshotStore (VS1-H2).
+ */
 import { describe, expect, it } from "vitest";
 import {
   composerDisabledReason,
@@ -6,7 +10,7 @@ import {
   mockReducer,
 } from "./mockStore";
 
-describe("mockStore session matrix", () => {
+describe("mockStore (compat smoke)", () => {
   it("starts on projects with demo project and ready session", () => {
     const s = createInitialMockState();
     expect(s.route.name).toBe("projects");

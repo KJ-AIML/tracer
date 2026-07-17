@@ -10,8 +10,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
-      // Source alias so shell dev works before packages/ui dist exists.
+      // Source alias so shell dev works before packages dist exists.
       "@tracer/ui": path.resolve(__dirname, "../../packages/ui/src/index.ts"),
+      "@tracer/event-types": path.resolve(__dirname, "../../packages/event-types/src/index.ts"),
     },
   },
   clearScreen: false,

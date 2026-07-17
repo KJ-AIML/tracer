@@ -1,5 +1,9 @@
 import type { ReactElement } from "react";
-import { getInvokeMode, TRACER_EVENTS_CHANNEL } from "../shared/commands/invoke";
+import {
+  getInvokeMode,
+  resolveInvokeBackend,
+  TRACER_EVENTS_CHANNEL,
+} from "../shared/commands/invoke";
 
 export function AboutPage(): ReactElement {
   return (
@@ -9,13 +13,15 @@ export function AboutPage(): ReactElement {
         Tracer is a desktop control plane for AI coding agents — session-centric, not a full IDE.
       </p>
       <ul className="list__meta">
-        <li>Module: W1-A Desktop Shell</li>
-        <li>Invoke mode: {getInvokeMode()}</li>
+        <li>Module: VS1-H2 Desktop Snapshot Wiring</li>
+        <li>Invoke mode: {getInvokeMode()} → backend {resolveInvokeBackend()}</li>
         <li>Event channel (contract): {TRACER_EVENTS_CHANNEL}</li>
-        <li>App info command: tracer_app_info (W1-F)</li>
+        <li>Presentation: typed snapshots via tracer_presentation_snapshot</li>
+        <li>App info command: tracer_app_info</li>
       </ul>
       <p className="list__meta">
-        Mock store only. No raw ACP parsing. Control plane handoff documented in docs/modules/w1-a/.
+        React receives typed snapshots only. No raw ACP parsing. No SQLite from UI. Process lifecycle
+        owned by control plane.
       </p>
     </div>
   );

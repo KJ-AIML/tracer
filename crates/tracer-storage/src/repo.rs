@@ -6,12 +6,12 @@
 use crate::db::DbPool;
 use crate::error::{StorageError, StorageResult};
 use crate::ids::{
-    AgentRunId, ApprovalId, ArtifactId, EventId, ProcessId, ProjectId, SessionId,
+    AgentRunId, ApprovalId, ArtifactId, EventId, ProcessId, ProjectId, SessionId, TracerId,
 };
 use crate::models::{
     ApprovalDecision, ApprovalDecisionRecord, ArtifactRecord, EventList, EventRecord,
     ProjectRecord, ProjectStatus, ReconcileReport, RuntimeProcessRecord, RuntimeProcessStatus,
-    SessionRecord, SessionStatus, Severity,
+    SessionRecord, SessionStatus, SessionStatusStorageExt, Severity, SeverityStorageExt,
 };
 use crate::timeutil::now_rfc3339;
 use async_trait::async_trait;
@@ -67,11 +67,7 @@ pub trait EventRepository: Send + Sync {
         after_sequence: i64,
         limit: i64,
     ) -> StorageResult<EventList>;
-    async fn get(
-        &self,
-        session_id: &SessionId,
-        event_id: &EventId,
-    ) -> StorageResult<EventRecord>;
+    async fn get(&self, session_id: &SessionId, event_id: &EventId) -> StorageResult<EventRecord>;
 }
 
 #[async_trait]
@@ -96,10 +92,7 @@ pub trait ApprovalRepository: Send + Sync {
 #[async_trait]
 pub trait ArtifactRepository: Send + Sync {
     async fn insert(&self, artifact: &ArtifactRecord) -> StorageResult<()>;
-    async fn list_by_session(
-        &self,
-        session_id: &SessionId,
-    ) -> StorageResult<Vec<ArtifactRecord>>;
+    async fn list_by_session(&self, session_id: &SessionId) -> StorageResult<Vec<ArtifactRecord>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +205,7 @@ impl SqliteStorage {
     }
 
     /// Insert an approval decision.
-    pub async fn insert_approval(
-        &self,
-        decision: &ApprovalDecisionRecord,
-    ) -> StorageResult<()> {
+    pub async fn insert_approval(&self, decision: &ApprovalDecisionRecord) -> StorageResult<()> {
         ApprovalRepository::insert(self, decision).await
     }
 
@@ -500,10 +490,7 @@ impl SessionRepository for SqliteStorage {
             .as_ref()
             .map(serde_json::to_string)
             .transpose()?;
-        let agent = session
-            .active_agent_run_id
-            .as_ref()
-            .map(|id| id.as_str());
+        let agent = session.active_agent_run_id.as_ref().map(|id| id.as_str());
 
         let res = sqlx::query(
             r#"
@@ -597,15 +584,14 @@ impl SessionRepository for SqliteStorage {
         status: SessionStatus,
     ) -> StorageResult<()> {
         let updated_at = now_rfc3339();
-        let res = sqlx::query(
-            "UPDATE sessions SET status = ?2, updated_at = ?3 WHERE session_id = ?1",
-        )
-        .bind(session_id.as_str())
-        .bind(status.as_str())
-        .bind(&updated_at)
-        .execute(&self.pool)
-        .await
-        .map_err(StorageError::from_sqlx)?;
+        let res =
+            sqlx::query("UPDATE sessions SET status = ?2, updated_at = ?3 WHERE session_id = ?1")
+                .bind(session_id.as_str())
+                .bind(status.as_str())
+                .bind(&updated_at)
+                .execute(&self.pool)
+                .await
+                .map_err(StorageError::from_sqlx)?;
 
         if res.rows_affected() == 0 {
             return Err(StorageError::not_found("session", session_id.as_str()));
@@ -624,10 +610,7 @@ impl SessionRepository for SqliteStorage {
             .as_ref()
             .map(serde_json::to_string)
             .transpose()?;
-        let agent = session
-            .active_agent_run_id
-            .as_ref()
-            .map(|id| id.as_str());
+        let agent = session.active_agent_run_id.as_ref().map(|id| id.as_str());
 
         let res = sqlx::query(
             r#"
@@ -706,10 +689,8 @@ impl SessionRepository for SqliteStorage {
                 .map_err(StorageError::from_sqlx)?;
 
                 if res.rows_affected() > 0 {
-                    updated.push(SessionId::parse(&sid).map_err(|e| {
-                        StorageError::Internal {
-                            message: format!("invalid session_id in db: {e}"),
-                        }
+                    updated.push(SessionId::parse(&sid).map_err(|e| StorageError::Internal {
+                        message: format!("invalid session_id in db: {e}"),
                     })?);
                 }
             }
@@ -804,13 +785,12 @@ impl EventRepository for SqliteStorage {
         let events: Result<Vec<_>, _> = rows.into_iter().map(|r| r.into_record()).collect();
         let events = events?;
 
-        let latest: (i64,) = sqlx::query_as(
-            "SELECT COALESCE(MAX(sequence), 0) FROM events WHERE session_id = ?1",
-        )
-        .bind(session_id.as_str())
-        .fetch_one(&self.pool)
-        .await
-        .map_err(StorageError::from_sqlx)?;
+        let latest: (i64,) =
+            sqlx::query_as("SELECT COALESCE(MAX(sequence), 0) FROM events WHERE session_id = ?1")
+                .bind(session_id.as_str())
+                .fetch_one(&self.pool)
+                .await
+                .map_err(StorageError::from_sqlx)?;
 
         Ok(EventList {
             events,
@@ -818,11 +798,7 @@ impl EventRepository for SqliteStorage {
         })
     }
 
-    async fn get(
-        &self,
-        session_id: &SessionId,
-        event_id: &EventId,
-    ) -> StorageResult<EventRecord> {
+    async fn get(&self, session_id: &SessionId, event_id: &EventId) -> StorageResult<EventRecord> {
         let row = sqlx::query_as::<_, EventRow>(
             r#"
             SELECT event_id, session_id, project_id, agent_run_id, sequence,
@@ -888,7 +864,10 @@ async fn insert_event_tx(
         Err(e) => {
             let mapped = StorageError::from_sqlx(e);
             if matches!(mapped, StorageError::AlreadyExists { .. }) {
-                Err(StorageError::already_exists("event", event.event_id.as_str()))
+                Err(StorageError::already_exists(
+                    "event",
+                    event.event_id.as_str(),
+                ))
             } else {
                 Err(mapped)
             }
@@ -1076,10 +1055,7 @@ impl ArtifactRepository for SqliteStorage {
         Ok(())
     }
 
-    async fn list_by_session(
-        &self,
-        session_id: &SessionId,
-    ) -> StorageResult<Vec<ArtifactRecord>> {
+    async fn list_by_session(&self, session_id: &SessionId) -> StorageResult<Vec<ArtifactRecord>> {
         let rows = sqlx::query_as::<_, ArtifactRow>(
             r#"
             SELECT artifact_id, session_id, project_id, kind, path,
@@ -1117,10 +1093,8 @@ struct ProjectRow {
 impl ProjectRow {
     fn into_record(self) -> StorageResult<ProjectRecord> {
         Ok(ProjectRecord {
-            project_id: ProjectId::parse(&self.project_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid project_id: {e}"),
-                }
+            project_id: ProjectId::parse(&self.project_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid project_id: {e}"),
             })?,
             name: self.name,
             root_path: self.root_path,
@@ -1169,15 +1143,11 @@ impl SessionRow {
         };
 
         Ok(SessionRecord {
-            session_id: SessionId::parse(&self.session_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid session_id: {e}"),
-                }
+            session_id: SessionId::parse(&self.session_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid session_id: {e}"),
             })?,
-            project_id: ProjectId::parse(&self.project_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid project_id: {e}"),
-                }
+            project_id: ProjectId::parse(&self.project_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid project_id: {e}"),
             })?,
             title: self.title,
             status: SessionStatus::parse(&self.status).ok_or_else(|| StorageError::Internal {
@@ -1239,15 +1209,11 @@ impl EventRow {
             })?,
             sequence: self.sequence,
             timestamp: self.timestamp,
-            project_id: ProjectId::parse(&self.project_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid project_id: {e}"),
-                }
+            project_id: ProjectId::parse(&self.project_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid project_id: {e}"),
             })?,
-            session_id: SessionId::parse(&self.session_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid session_id: {e}"),
-                }
+            session_id: SessionId::parse(&self.session_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid session_id: {e}"),
             })?,
             agent_run_id,
             event_type: self.event_type,
@@ -1280,15 +1246,11 @@ impl ProcessRow {
             None => None,
         };
         Ok(RuntimeProcessRecord {
-            process_id: ProcessId::parse(&self.process_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid process_id: {e}"),
-                }
+            process_id: ProcessId::parse(&self.process_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid process_id: {e}"),
             })?,
-            session_id: SessionId::parse(&self.session_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid session_id: {e}"),
-                }
+            session_id: SessionId::parse(&self.session_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid session_id: {e}"),
             })?,
             pid: self.pid,
             executable: self.executable,
@@ -1335,10 +1297,8 @@ impl ApprovalRow {
                     message: format!("invalid approval_id: {e}"),
                 }
             })?,
-            session_id: SessionId::parse(&self.session_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid session_id: {e}"),
-                }
+            session_id: SessionId::parse(&self.session_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid session_id: {e}"),
             })?,
             event_id,
             decision: ApprovalDecision::parse(&self.decision).ok_or_else(|| {
@@ -1376,15 +1336,11 @@ impl ArtifactRow {
                     message: format!("invalid artifact_id: {e}"),
                 }
             })?,
-            session_id: SessionId::parse(&self.session_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid session_id: {e}"),
-                }
+            session_id: SessionId::parse(&self.session_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid session_id: {e}"),
             })?,
-            project_id: ProjectId::parse(&self.project_id).map_err(|e| {
-                StorageError::Internal {
-                    message: format!("invalid project_id: {e}"),
-                }
+            project_id: ProjectId::parse(&self.project_id).map_err(|e| StorageError::Internal {
+                message: format!("invalid project_id: {e}"),
             })?,
             kind: self.kind,
             path: self.path,

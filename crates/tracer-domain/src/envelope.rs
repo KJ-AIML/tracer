@@ -196,7 +196,10 @@ mod tests {
         let out = env.to_json_value().unwrap();
         assert_eq!(out["futureEnvelopeField"], "keep-me");
         assert_eq!(out["type"], "vendor.future.event");
-        assert_eq!(out["adapter"]["extensions"]["x.ai/method"], "x.ai/custom_notify");
+        assert_eq!(
+            out["adapter"]["extensions"]["x.ai/method"],
+            "x.ai/custom_notify"
+        );
     }
 
     #[test]

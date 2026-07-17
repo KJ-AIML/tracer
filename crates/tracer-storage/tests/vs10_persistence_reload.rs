@@ -67,9 +67,15 @@ async fn vs10_persistence_and_reload() {
         let catalog = [
             ("session.created", json!({"title": "VS-10 session"})),
             ("runtime.process.started", json!({"pid": 1234})),
-            ("runtime.process.ready", json!({"capabilities": {"promptStreaming": true}})),
+            (
+                "runtime.process.ready",
+                json!({"capabilities": {"promptStreaming": true}}),
+            ),
             ("session.ready", json!({})),
-            ("session.prompt.submitted", json!({"promptId": "p1", "text": "hi"})),
+            (
+                "session.prompt.submitted",
+                json!({"promptId": "p1", "text": "hi"}),
+            ),
             (
                 "adapter.protocol.unknown",
                 json!({"vendor": "x", "rawSummary": "keep"}),

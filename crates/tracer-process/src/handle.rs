@@ -101,10 +101,7 @@ impl ManagedProcess {
                         config.executable.display()
                     )
                 } else {
-                    format!(
-                        "failed to spawn {}: {err}",
-                        config.executable.display()
-                    )
+                    format!("failed to spawn {}: {err}", config.executable.display())
                 };
                 let pe = ProcessError::new(class, message);
                 let _ = events_tx.send(ProcessEvent::Failed {
@@ -286,12 +283,12 @@ impl ManagedProcess {
     pub fn recv_event_timeout(&self, timeout: Duration) -> Result<ProcessEvent, ProcessError> {
         match self.events_rx.recv_timeout(timeout) {
             Ok(ev) => Ok(ev),
-            Err(RecvTimeoutError::Timeout) => Err(ProcessError::timeout(
-                "timed out waiting for process event",
-            )),
-            Err(RecvTimeoutError::Disconnected) => Err(ProcessError::internal(
-                "process event channel disconnected",
-            )),
+            Err(RecvTimeoutError::Timeout) => {
+                Err(ProcessError::timeout("timed out waiting for process event"))
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                Err(ProcessError::internal("process event channel disconnected"))
+            }
         }
     }
 
@@ -350,9 +347,7 @@ impl ManagedProcess {
         let _ = self.close_stdin();
         match self.wait_timeout(graceful) {
             Ok(info) => Ok(info),
-            Err(err) if err.class == ProcessErrorClass::Timeout => {
-                self.kill_force(force_wait)
-            }
+            Err(err) if err.class == ProcessErrorClass::Timeout => self.kill_force(force_wait),
             Err(err) => Err(err),
         }
     }

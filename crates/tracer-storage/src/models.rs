@@ -3,11 +3,16 @@
 //! Shapes follow Gate 0 contracts:
 //! - projects / sessions: `TAURI_COMMAND_CONTRACT_V1`
 //! - events: `TRACER_EVENT_PROTOCOL_V1` envelope
-//! - session status vocabulary: vertical slice §7
+//! - session status vocabulary: vertical slice §7 (canonical in `tracer-domain`)
 
-use crate::ids::{AgentRunId, ApprovalId, ArtifactId, EventId, ProcessId, ProjectId, SessionId};
+use crate::ids::{
+    AgentRunId, ApprovalId, ArtifactId, EventId, ProcessId, ProjectId, SessionId, TracerId,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+
+// Canonical session/severity vocabulary from W1-B domain crate.
+pub use tracer_domain::{SessionStatus, Severity};
 
 /// Project path health as observed by control plane / storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,56 +42,16 @@ impl ProjectStatus {
     }
 }
 
-/// Session status (control plane truth).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionStatus {
-    Creating,
-    StartingRuntime,
-    Ready,
-    Running,
-    AwaitingApproval,
-    Cancelling,
-    Completed,
-    Failed,
-    Disconnected,
-    Stopped,
+/// Storage-oriented helpers on the domain [`SessionStatus`].
+pub trait SessionStatusStorageExt {
+    /// Statuses that imply a live runtime process may exist.
+    fn implies_live_process(self) -> bool;
+    /// Terminal statuses (delegates to domain `is_terminal`).
+    fn is_terminal_status(self) -> bool;
 }
 
-impl SessionStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Creating => "creating",
-            Self::StartingRuntime => "starting_runtime",
-            Self::Ready => "ready",
-            Self::Running => "running",
-            Self::AwaitingApproval => "awaiting_approval",
-            Self::Cancelling => "cancelling",
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Disconnected => "disconnected",
-            Self::Stopped => "stopped",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "creating" => Some(Self::Creating),
-            "starting_runtime" => Some(Self::StartingRuntime),
-            "ready" => Some(Self::Ready),
-            "running" => Some(Self::Running),
-            "awaiting_approval" => Some(Self::AwaitingApproval),
-            "cancelling" => Some(Self::Cancelling),
-            "completed" => Some(Self::Completed),
-            "failed" => Some(Self::Failed),
-            "disconnected" => Some(Self::Disconnected),
-            "stopped" => Some(Self::Stopped),
-            _ => None,
-        }
-    }
-
-    /// Statuses that imply a live runtime process may exist.
-    pub fn implies_live_process(self) -> bool {
+impl SessionStatusStorageExt for SessionStatus {
+    fn implies_live_process(self) -> bool {
         matches!(
             self,
             Self::Creating
@@ -98,38 +63,23 @@ impl SessionStatus {
         )
     }
 
-    pub fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::Failed | Self::Disconnected | Self::Stopped
-        )
+    fn is_terminal_status(self) -> bool {
+        tracer_domain::is_terminal(self)
     }
 }
 
-/// Event severity presentation hint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum Severity {
-    #[default]
-    Info,
-    Warn,
-    Error,
+/// Parse helpers for domain [`Severity`] (DB row mapping).
+pub trait SeverityStorageExt {
+    /// Parse wire string from SQLite column.
+    fn parse(s: &str) -> Option<Severity>;
 }
 
-impl Severity {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Info => "info",
-            Self::Warn => "warn",
-            Self::Error => "error",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Self> {
+impl SeverityStorageExt for Severity {
+    fn parse(s: &str) -> Option<Severity> {
         match s {
-            "info" => Some(Self::Info),
-            "warn" => Some(Self::Warn),
-            "error" => Some(Self::Error),
+            "info" => Some(Severity::Info),
+            "warn" => Some(Severity::Warn),
+            "error" => Some(Severity::Error),
             _ => None,
         }
     }
@@ -196,15 +146,18 @@ impl EventRecord {
     /// Build the full envelope JSON object (protocol shape).
     pub fn to_envelope_json(&self) -> JsonValue {
         let mut map = serde_json::Map::new();
-        map.insert(
-            "eventVersion".into(),
-            JsonValue::from(self.event_version),
-        );
+        map.insert("eventVersion".into(), JsonValue::from(self.event_version));
         map.insert("eventId".into(), JsonValue::from(self.event_id.as_str()));
         map.insert("sequence".into(), JsonValue::from(self.sequence));
         map.insert("timestamp".into(), JsonValue::from(self.timestamp.clone()));
-        map.insert("projectId".into(), JsonValue::from(self.project_id.as_str()));
-        map.insert("sessionId".into(), JsonValue::from(self.session_id.as_str()));
+        map.insert(
+            "projectId".into(),
+            JsonValue::from(self.project_id.as_str()),
+        );
+        map.insert(
+            "sessionId".into(),
+            JsonValue::from(self.session_id.as_str()),
+        );
         map.insert(
             "agentRunId".into(),
             match &self.agent_run_id {
@@ -295,10 +248,7 @@ impl EventRecord {
                 let s = v
                     .as_str()
                     .ok_or_else(|| "severity must be string".to_string())?;
-                Some(
-                    Severity::parse(s)
-                        .ok_or_else(|| format!("unknown severity `{s}`"))?,
-                )
+                Some(Severity::parse(s).ok_or_else(|| format!("unknown severity `{s}`"))?)
             }
         };
 

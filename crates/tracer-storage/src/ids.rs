@@ -1,15 +1,24 @@
-//! Stub Tracer domain identifiers (UUID strings).
+//! Tracer identifiers for the storage layer.
 //!
-//! W1-B owns the canonical `tracer-domain` crate. Until that crate is integrated
-//! into the workspace, storage uses these contract-compatible stubs so W1-E can
-//! land independently (WAVE_1_READINESS: "stub IDs if B slightly lags").
+//! Canonical primary keys (`EventId`, `ProjectId`, `SessionId`, `AgentRunId`)
+//! are re-exported from [`tracer_domain`] so storage does not maintain a second
+//! domain model (W1.1 integration / W1-B ownership).
+//!
+//! Storage-local IDs (`ProcessId`, `ApprovalId`, `ArtifactId`) remain here until
+//! W1-B or a later domain expansion owns them.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
 
-macro_rules! tracer_id {
+// --- Canonical domain IDs (W1-B) ---------------------------------------------
+
+pub use tracer_domain::{AgentRunId, EventId, ProjectId, SessionId, TracerId};
+
+// --- Storage-local IDs (not yet in tracer-domain) ----------------------------
+
+macro_rules! storage_id {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -65,31 +74,15 @@ macro_rules! tracer_id {
     };
 }
 
-tracer_id!(
-    /// Unique identifier for a normalized event instance.
-    EventId
-);
-tracer_id!(
-    /// Tracer project identifier.
-    ProjectId
-);
-tracer_id!(
-    /// Tracer session identifier.
-    SessionId
-);
-tracer_id!(
-    /// Active agent run within a session.
-    AgentRunId
-);
-tracer_id!(
-    /// Runtime process summary row.
+storage_id!(
+    /// Runtime process summary row (storage / control-plane identity).
     ProcessId
 );
-tracer_id!(
+storage_id!(
     /// Approval decision audit row.
     ApprovalId
 );
-tracer_id!(
+storage_id!(
     /// Basic artifact row.
     ArtifactId
 );

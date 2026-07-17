@@ -37,13 +37,13 @@ fn wait_for_started(proc: &ManagedProcess) -> ProcessEvent {
 #[test]
 fn spawn_emits_started_and_is_process_alive_not_protocol_ready() {
     let mgr = ProcessManager::new();
-    let mut proc = mgr
-        .spawn(base_config(&["sleep-ms", "500"]))
-        .expect("spawn");
+    let mut proc = mgr.spawn(base_config(&["sleep-ms", "500"])).expect("spawn");
 
     let started = wait_for_started(&proc);
     match started {
-        ProcessEvent::Started { pid, executable, .. } => {
+        ProcessEvent::Started {
+            pid, executable, ..
+        } => {
             assert_eq!(pid, proc.pid());
             assert!(!executable.is_empty());
         }
@@ -124,7 +124,10 @@ fn capture_stderr_events() {
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
     while std::time::Instant::now() < deadline {
         for ev in proc.drain_events() {
-            if let ProcessEvent::StderrChunk { chunk, truncated, .. } = ev {
+            if let ProcessEvent::StderrChunk {
+                chunk, truncated, ..
+            } = ev
+            {
                 assert!(chunk.contains("warn-line"), "chunk={chunk}");
                 assert!(!truncated);
                 saw_stderr = true;
@@ -169,9 +172,7 @@ fn force_kill_long_sleep() {
         .expect("spawn");
     let _ = wait_for_started(&proc);
 
-    let info = proc
-        .kill_force(Duration::from_secs(3))
-        .expect("force kill");
+    let info = proc.kill_force(Duration::from_secs(3)).expect("force kill");
     assert!(info.expected);
     assert!(!proc.is_alive());
 }
@@ -210,9 +211,7 @@ fn graceful_then_force_on_hang() {
 #[test]
 fn write_stdin_roundtrip() {
     let mgr = ProcessManager::new();
-    let mut proc = mgr
-        .spawn(base_config(&["read-stdin-line"]))
-        .expect("spawn");
+    let mut proc = mgr.spawn(base_config(&["read-stdin-line"])).expect("spawn");
     proc.write_stdin(b"ping\n").expect("write");
     let mut stdout = proc.take_stdout().expect("stdout");
     let mut buf = String::new();
@@ -301,9 +300,7 @@ fn force_kill_reaps_grandchild_no_orphan() {
     let child_pid = child_pid.expect("child_pid in helper output");
 
     // Force kill managed parent (tree).
-    let _ = proc
-        .kill_force(Duration::from_secs(3))
-        .expect("kill force");
+    let _ = proc.kill_force(Duration::from_secs(3)).expect("kill force");
 
     // Allow OS a moment to reap.
     thread::sleep(Duration::from_millis(300));

@@ -1,7 +1,8 @@
 /**
- * Temporary typed interfaces for Tracer shell (W1-A).
+ * Shell-facing types for Tracer (W1-A + W1.1 domain adoption).
  *
- * REPLACE_WHEN_W1B_EVENT_TYPES_AVAILABLE — switch to @tracer/event-types.
+ * Session status and event envelope subsets come from `@tracer/event-types` (W1-B).
+ * Presentation kinds remain UI-owned (`@tracer/ui`).
  * REPLACE_WHEN_W1F_CONTROL_PLANE_AVAILABLE — wire invoke + tracer://events.
  *
  * No raw vendor-event / ACP parsing lives here (ADR-002).
@@ -10,8 +11,9 @@
 export type {
   PresentationKind,
   RuntimeObservation,
-  SessionStatus,
 } from "@tracer/ui";
+
+export type { SessionStatus } from "@tracer/event-types";
 
 /** Project list item shape from TAURI_COMMAND_CONTRACT_V1 `tracer_project_list`. */
 export interface ProjectSummary {
@@ -28,14 +30,14 @@ export interface SessionSummary {
   sessionId: string;
   projectId: string;
   title: string;
-  status: import("@tracer/ui").SessionStatus;
+  status: import("@tracer/event-types").SessionStatus;
   createdAt: string;
   updatedAt: string;
 }
 
 /**
  * Minimal normalized event envelope (protocol v1 subset for mock store).
- * REPLACE_WHEN_W1B_EVENT_TYPES_AVAILABLE
+ * Canonical full envelope lives in `@tracer/event-types`; this is the mock-store view.
  */
 export interface TracerEventEnvelope {
   eventId: string;

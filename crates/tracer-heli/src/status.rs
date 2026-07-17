@@ -5,10 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::conflict::{detect_path_claim_conflicts, PathClaimConflict};
 use crate::error::HeliError;
-use crate::paths::{canonicalize_path, path_to_forward_slash, find_workspace_root, HeliPaths};
+use crate::paths::{canonicalize_path, find_workspace_root, path_to_forward_slash, HeliPaths};
 use crate::types::{
-    LeaseRecord, LeaseState, ManifestInfo, SessionRecord, TargetFile, TaskRecord, WorktreeBinding,
-    WorktreeSource, WorkspaceIndexFile, WorkspaceMode, WorkspaceSchemaFile,
+    LeaseRecord, LeaseState, ManifestInfo, SessionRecord, TargetFile, TaskRecord,
+    WorkspaceIndexFile, WorkspaceMode, WorkspaceSchemaFile, WorktreeBinding, WorktreeSource,
 };
 
 /// Result of probing for a workspace without failing hard.
@@ -153,13 +153,7 @@ fn load_workspace_status_from_paths(paths: &HeliPaths) -> Result<WorkspaceStatus
     let mut task_views = Vec::with_capacity(tasks.len());
     for task in &tasks {
         let lease = read_lease(paths, &task.task_id, &mut warnings)?;
-        task_views.push(project_task(
-            task,
-            lease,
-            &sessions,
-            &bindings,
-            now_ms,
-        ));
+        task_views.push(project_task(task, lease, &sessions, &bindings, now_ms));
     }
 
     let conflicts = detect_path_claim_conflicts(&tasks, None);
@@ -402,15 +396,12 @@ fn project_task(
         .collect();
 
     if worktree.is_empty() {
-        let fallback: Option<&SessionRecord> = writer_sessions
-            .first()
-            .map(|s| **s)
-            .or_else(|| {
-                active_sessions
-                    .iter()
-                    .find(|s| s.session_id == writer)
-                    .copied()
-            });
+        let fallback: Option<&SessionRecord> = writer_sessions.first().map(|s| **s).or_else(|| {
+            active_sessions
+                .iter()
+                .find(|s| s.session_id == writer)
+                .copied()
+        });
         if let Some(ws) = fallback {
             if let Some(ref wt) = ws.worktree_path {
                 if !wt.is_empty() {
@@ -424,7 +415,10 @@ fn project_task(
     }
 
     if worktree.is_empty() {
-        if let Some(b) = bindings.iter().find(|b| b.task_id.as_deref() == Some(&task.task_id)) {
+        if let Some(b) = bindings
+            .iter()
+            .find(|b| b.task_id.as_deref() == Some(&task.task_id))
+        {
             if !b.canonical_worktree_path.is_empty() {
                 worktree = normalize_worktree(&b.canonical_worktree_path);
                 source = WorktreeSource::Binding;
@@ -501,7 +495,8 @@ fn is_lease_expired(expires_at: &str, now_ms: u128) -> bool {
 fn parse_iso_ms(s: &str) -> Option<u128> {
     // Accept RFC3339 / ISO-8601 with Z.
     // Prefer `time` crate parsing.
-    let odt = time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339).ok()?;
+    let odt =
+        time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339).ok()?;
     let millis = odt.unix_timestamp_nanos() / 1_000_000;
     if millis < 0 {
         return None;
@@ -527,9 +522,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, HeliError
     })
 }
 
-fn read_json_optional<T: serde::de::DeserializeOwned>(
-    path: &Path,
-) -> Result<Option<T>, HeliError> {
+fn read_json_optional<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>, HeliError> {
     if !path.is_file() {
         return Ok(None);
     }

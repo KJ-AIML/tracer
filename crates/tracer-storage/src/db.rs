@@ -58,12 +58,12 @@ pub async fn open_database(db_path: impl AsRef<Path>, opts: OpenOptions) -> Stor
 
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                StorageError::Database {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| StorageError::Database {
                     message: format!("failed to create database directory: {e}"),
                     source: None,
-                }
-            })?;
+                })?;
         }
     }
 

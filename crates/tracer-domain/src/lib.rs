@@ -26,10 +26,10 @@ pub use envelope::EventEnvelope;
 pub use error::{ErrorCategory, ErrorClass, TracerError};
 pub use event_type::{EventType, KNOWN_EVENT_TYPES};
 pub use ids::{AgentRunId, EventId, ProjectId, SessionId, TracerId};
-pub use sequence::{SequenceError, SequenceTracker, validate_sequence_order};
-pub use session::{SessionStatus, StatusTransitionError, is_terminal, is_valid_transition};
+pub use sequence::{validate_sequence_order, SequenceError, SequenceTracker};
+pub use session::{is_terminal, is_valid_transition, SessionStatus, StatusTransitionError};
 pub use severity::Severity;
-pub use validate::{EnvelopeValidationError, validate_envelope};
+pub use validate::{validate_envelope, EnvelopeValidationError};
 
 /// Current Tracer Event Protocol major version.
 pub const EVENT_PROTOCOL_VERSION: u32 = 1;

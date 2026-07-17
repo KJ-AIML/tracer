@@ -9,8 +9,8 @@ use tempfile::TempDir;
 use tracer_storage::{
     database_path, open_database, run_migrations, schema_logical_version, writer_policy,
     AgentRunId, EventId, EventRecord, OpenOptions, ProjectId, ProjectRecord, ProjectStatus,
-    SessionId, SessionRecord, SessionStatus, Severity, SqliteStorage, StorageError,
-    StorageErrorClass, SCHEMA_LOGICAL_VERSION,
+    SessionId, SessionRecord, SessionStatus, SessionStatusStorageExt, Severity, SqliteStorage,
+    StorageError, StorageErrorClass, TracerId, SCHEMA_LOGICAL_VERSION,
 };
 
 async fn open_temp() -> (TempDir, SqliteStorage) {
@@ -144,10 +144,7 @@ async fn ordered_event_replay() {
         expected_ids.push((e.sequence, e.event_id));
     }
 
-    let list = store
-        .list_events(&session_id, 0, 200)
-        .await
-        .expect("list");
+    let list = store.list_events(&session_id, 0, 200).await.expect("list");
     assert_eq!(list.events.len(), types.len());
     assert_eq!(list.latest_sequence, types.len() as i64);
 
@@ -162,10 +159,7 @@ async fn ordered_event_replay() {
     }
 
     // Pagination: after_sequence
-    let page = store
-        .list_events(&session_id, 3, 2)
-        .await
-        .expect("page");
+    let page = store.list_events(&session_id, 3, 2).await.expect("page");
     assert_eq!(page.events.len(), 2);
     assert_eq!(page.events[0].sequence, 4);
     assert_eq!(page.events[1].sequence, 5);
@@ -204,10 +198,7 @@ async fn unknown_event_type_and_payload_preserved() {
 
     assert_eq!(loaded.event_type, "adapter.protocol.unknown");
     assert_eq!(loaded.payload, payload);
-    assert_eq!(
-        loaded.adapter.as_ref().unwrap()["futureAdapterField"],
-        42
-    );
+    assert_eq!(loaded.adapter.as_ref().unwrap()["futureAdapterField"], 42);
     assert_eq!(
         loaded.adapter.as_ref().unwrap()["rawRef"],
         "opaque-fragment"
@@ -268,10 +259,7 @@ async fn interrupted_write_rolls_back() {
         tx.rollback().await.expect("rollback");
     }
 
-    let list = store
-        .list_events(&session_id, 0, 100)
-        .await
-        .expect("list");
+    let list = store.list_events(&session_id, 0, 100).await.expect("list");
     assert!(
         list.events.is_empty(),
         "rolled-back event must not be durable"
@@ -410,7 +398,14 @@ async fn no_secrets_columns_in_schema() {
     .await
     .expect("schema introspect");
 
-    let forbidden = ["token", "password", "secret", "api_key", "apikey", "credential"];
+    let forbidden = [
+        "token",
+        "password",
+        "secret",
+        "api_key",
+        "apikey",
+        "credential",
+    ];
     for (table, col) in &rows {
         let col_l = col.to_lowercase();
         for bad in forbidden {
@@ -472,6 +467,10 @@ async fn append_events_is_transactional() {
     ));
 
     let list = store.list_events(&session_id, 0, 100).await.unwrap();
-    assert_eq!(list.events.len(), 1, "failed batch must not leave partial rows");
+    assert_eq!(
+        list.events.len(),
+        1,
+        "failed batch must not leave partial rows"
+    );
     assert_eq!(list.latest_sequence, 1);
 }

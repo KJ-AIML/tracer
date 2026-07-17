@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use pretty_assertions::assert_eq;
 use tracer_heli::{
     find_workspace_root, load_workspace_status, try_load_workspace_status, LeaseState,
-    WorktreeSource, WorkspaceMode, WorkspaceProbe,
+    WorkspaceMode, WorkspaceProbe, WorktreeSource,
 };
 
 fn fixture_src(name: &str) -> PathBuf {

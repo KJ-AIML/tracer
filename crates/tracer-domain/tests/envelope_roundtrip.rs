@@ -9,15 +9,13 @@ use tracer_domain::payload::builders;
 use tracer_domain::sequence::{validate_sequence_order, SequenceTracker};
 use tracer_domain::validate::{validate_envelope, validate_session_event_stream};
 use tracer_domain::{
-    AgentRunId, Capabilities, ErrorCategory, ErrorClass, EventEnvelope,
-    EventId, EventType, ProjectId, SessionId, SessionStatus, Severity, TracerError,
-    EVENT_PROTOCOL_VERSION,
+    AgentRunId, Capabilities, ErrorCategory, ErrorClass, EventEnvelope, EventId, EventType,
+    ProjectId, SessionId, SessionStatus, Severity, TracerError, EVENT_PROTOCOL_VERSION,
 };
 
 fn fixtures_dir() -> PathBuf {
     // crates/tracer-domain/tests -> repo root tests/contract/event-protocol/fixtures
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/contract/event-protocol/fixtures")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/contract/event-protocol/fixtures")
 }
 
 fn load_fixture(name: &str) -> Value {
@@ -30,9 +28,7 @@ fn load_fixture(name: &str) -> Value {
 
 fn load_stream(name: &str) -> Vec<EventEnvelope> {
     let v = load_fixture(name);
-    let arr = v
-        .as_array()
-        .expect("stream fixture must be a JSON array");
+    let arr = v.as_array().expect("stream fixture must be a JSON array");
     arr.iter()
         .map(|item| EventEnvelope::from_json_value(item.clone()).expect("envelope"))
         .collect()
@@ -57,7 +53,10 @@ fn happy_path_stream_round_trip_and_order() {
     }
 
     // Known type presence
-    let types: Vec<_> = events.iter().map(|e| e.event_type.as_str().to_string()).collect();
+    let types: Vec<_> = events
+        .iter()
+        .map(|e| e.event_type.as_str().to_string())
+        .collect();
     assert!(types.iter().any(|t| t == "runtime.process.ready"));
     assert!(types.iter().any(|t| t == "session.prompt.submitted"));
     assert!(types
@@ -79,10 +78,7 @@ fn unknown_vendor_fixture_preserves_metadata() {
     );
     let out = env.to_json_value().unwrap();
     // round-trip keeps extensions
-    if let Some(ext) = out
-        .get("adapter")
-        .and_then(|a| a.get("extensions"))
-    {
+    if let Some(ext) = out.get("adapter").and_then(|a| a.get("extensions")) {
         assert!(ext.as_object().map(|o| !o.is_empty()).unwrap_or(false));
     }
 }
@@ -109,9 +105,10 @@ fn crash_exit_fixture_order() {
     let events = load_stream("unexpected_process_exit.json");
     validate_session_event_stream(&events).unwrap();
     let types: Vec<_> = events.iter().map(|e| e.event_type.clone()).collect();
-    assert!(types
-        .iter()
-        .any(|t| matches!(t, EventType::RuntimeProcessExited | EventType::RuntimeProcessFailed)));
+    assert!(types.iter().any(|t| matches!(
+        t,
+        EventType::RuntimeProcessExited | EventType::RuntimeProcessFailed
+    )));
     assert!(types.iter().any(|t| matches!(
         t,
         EventType::SessionFailed | EventType::SessionStatusChanged

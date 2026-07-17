@@ -12,7 +12,10 @@ pub mod builders {
     use serde_json::json;
 
     /// `runtime.process.ready` payload.
-    pub fn process_ready(capabilities: &Capabilities, protocol_version: &str) -> Map<String, Value> {
+    pub fn process_ready(
+        capabilities: &Capabilities,
+        protocol_version: &str,
+    ) -> Map<String, Value> {
         json!({
             "capabilities": capabilities,
             "protocolVersion": protocol_version,
@@ -69,9 +72,7 @@ pub mod builders {
             "to": to.as_str(),
         });
         if let Some(r) = reason {
-            m.as_object_mut()
-                .unwrap()
-                .insert("reason".into(), json!(r));
+            m.as_object_mut().unwrap().insert("reason".into(), json!(r));
         }
         m.as_object().cloned().unwrap_or_default()
     }

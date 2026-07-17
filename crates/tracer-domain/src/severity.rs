@@ -34,7 +34,10 @@ mod tests {
     fn severity_serde() {
         assert_eq!(serde_json::to_string(&Severity::Info).unwrap(), "\"info\"");
         assert_eq!(serde_json::to_string(&Severity::Warn).unwrap(), "\"warn\"");
-        assert_eq!(serde_json::to_string(&Severity::Error).unwrap(), "\"error\"");
+        assert_eq!(
+            serde_json::to_string(&Severity::Error).unwrap(),
+            "\"error\""
+        );
         let s: Severity = serde_json::from_str("\"error\"").unwrap();
         assert_eq!(s, Severity::Error);
     }

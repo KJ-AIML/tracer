@@ -60,6 +60,6 @@ pub use status::{
 };
 pub use types::{
     HostBinding, LeaseRecord, LeaseState, PathClaims, RepoEntry, SessionMode, SessionRecord,
-    TargetFile, TaskRecord, TaskSource, TaskTarget, WorktreeBinding, WorktreeSource,
-    WorkspaceIndexFile, WorkspaceMode, WorkspaceSchemaFile,
+    TargetFile, TaskRecord, TaskSource, TaskTarget, WorkspaceIndexFile, WorkspaceMode,
+    WorkspaceSchemaFile, WorktreeBinding, WorktreeSource,
 };

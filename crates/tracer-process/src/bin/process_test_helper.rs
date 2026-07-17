@@ -42,17 +42,11 @@ fn main() {
             let _ = io::stderr().flush();
         }
         "sleep-ms" => {
-            let ms: u64 = args
-                .first()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(1000);
+            let ms: u64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(1000);
             thread::sleep(Duration::from_millis(ms));
         }
         "exit" => {
-            let code: i32 = args
-                .first()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(1);
+            let code: i32 = args.first().and_then(|s| s.parse().ok()).unwrap_or(1);
             std::process::exit(code);
         }
         "hang-until-stdin-close" => {
@@ -68,10 +62,7 @@ fn main() {
         "spawn-child-sleep-ms" => {
             // Spawn a long-lived grandchild, print parent+child pids, then sleep.
             // Used to verify Job Object / process-group tree kill (no orphans).
-            let ms: u64 = args
-                .first()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(60_000);
+            let ms: u64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(60_000);
             let self_exe = std::env::current_exe().expect("current_exe");
             let mut child = Command::new(&self_exe)
                 .arg("sleep-ms")

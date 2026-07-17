@@ -1,7 +1,6 @@
 /**
- * Session statuses from W0-A catalog / STATE_MATRIX.
- * Temporary UI copy until @tracer/event-types (W1-B) is available.
- * REPLACE_WHEN_W1B_EVENT_TYPES_AVAILABLE
+ * Session statuses — re-exported shape matching `@tracer/event-types` / Event Protocol v1.
+ * UI package stays free of a hard runtime dependency on event-types; wire values must match.
  */
 export type SessionStatus =
   | "creating"

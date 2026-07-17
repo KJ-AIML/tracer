@@ -228,7 +228,12 @@ pub struct TaskRecord {
 impl TaskRecord {
     /// True when the task is still considered active by harness conventions.
     pub fn is_active(&self) -> bool {
-        match self.status.as_deref().map(str::to_ascii_lowercase).as_deref() {
+        match self
+            .status
+            .as_deref()
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+        {
             None | Some("") => false,
             Some("complete") | Some("closed") | Some("abandoned") | Some("cancelled") => false,
             Some(_) => true,

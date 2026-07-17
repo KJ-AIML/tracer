@@ -115,13 +115,7 @@ pub fn is_valid_transition(from: SessionStatus, to: SessionStatus) -> bool {
         ),
         Running => matches!(
             to,
-            AwaitingApproval
-                | Ready
-                | Cancelling
-                | Completed
-                | Failed
-                | Disconnected
-                | Stopped
+            AwaitingApproval | Ready | Cancelling | Completed | Failed | Disconnected | Stopped
         ),
         AwaitingApproval => matches!(
             to,

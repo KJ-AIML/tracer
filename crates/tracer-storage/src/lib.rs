@@ -24,8 +24,10 @@
 //!
 //! ## Domain IDs
 //!
-//! Until `tracer-domain` (W1-B) is workspace-integrated, this crate ships
-//! contract-compatible UUID stub IDs under [`ids`].
+//! Canonical IDs (`EventId`, `ProjectId`, `SessionId`, `AgentRunId`) and
+//! session/severity vocabulary come from `tracer-domain` (W1-B). Storage-local
+//! IDs (`ProcessId`, `ApprovalId`, `ArtifactId`) remain under [`ids`] until the
+//! domain crate expands.
 //!
 //! ## Paths
 //!
@@ -44,17 +46,17 @@ pub mod repo;
 pub mod timeutil;
 
 pub use db::{
-    open_database, open_in_memory, run_migrations, schema_logical_version, writer_policy,
-    DbPool, OpenOptions,
+    open_database, open_in_memory, run_migrations, schema_logical_version, writer_policy, DbPool,
+    OpenOptions,
 };
 pub use error::{StorageError, StorageErrorClass, StorageResult};
 pub use ids::{
-    AgentRunId, ApprovalId, ArtifactId, EventId, ProcessId, ProjectId, SessionId,
+    AgentRunId, ApprovalId, ArtifactId, EventId, ProcessId, ProjectId, SessionId, TracerId,
 };
 pub use models::{
     ApprovalDecision, ApprovalDecisionRecord, ArtifactRecord, EventList, EventRecord,
     ProjectRecord, ProjectStatus, ReconcileReport, RuntimeProcessRecord, RuntimeProcessStatus,
-    SessionRecord, SessionStatus, Severity,
+    SessionRecord, SessionStatus, SessionStatusStorageExt, Severity, SeverityStorageExt,
 };
 pub use path::{database_dir, database_path, ensure_database_dir, TRACER_DATA_DIR, TRACER_DB_FILE};
 pub use repo::{

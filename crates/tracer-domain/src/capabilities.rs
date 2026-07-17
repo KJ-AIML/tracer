@@ -118,6 +118,9 @@ mod tests {
         assert!(caps.prompt_streaming);
         assert!(!caps.cancellation);
         assert_eq!(caps.unknown.get("x.ai/experimental"), Some(&json!(true)));
-        assert_eq!(caps.unknown.get("vendorFeature"), Some(&json!({ "level": 2 })));
+        assert_eq!(
+            caps.unknown.get("vendorFeature"),
+            Some(&json!({ "level": 2 }))
+        );
     }
 }

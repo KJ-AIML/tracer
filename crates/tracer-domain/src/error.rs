@@ -139,9 +139,9 @@ impl ErrorClass {
             | Self::RuntimeDisconnected
             | Self::RuntimeCrashed => ErrorCategory::Process,
 
-            Self::ProtocolInitializeFailed
-            | Self::ProtocolParseError
-            | Self::ProtocolViolation => ErrorCategory::Protocol,
+            Self::ProtocolInitializeFailed | Self::ProtocolParseError | Self::ProtocolViolation => {
+                ErrorCategory::Protocol
+            }
 
             Self::CapabilityMismatch | Self::CapabilityUnsupported => ErrorCategory::Capability,
 

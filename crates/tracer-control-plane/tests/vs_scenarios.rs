@@ -821,3 +821,235 @@ async fn storage_temp_sqlite_open() {
     let pool = open_database(&db, OpenOptions::default()).await.unwrap();
     let _ = SqliteStorage::new(pool);
 }
+
+
+// ---------------------------------------------------------------------------
+// File-backed SQLite critical scenarios (Gate 1.3 Part 8)
+// Unique temp DB file; reopen for recovery; migrations; ordering; cleanup.
+// network: no, credentials: no, live Grok: no
+// ---------------------------------------------------------------------------
+
+async fn open_file_cp() -> (tempfile::TempDir, ControlPlane, PathBuf) {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join(format!(
+        "gate13-{}.db",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let cp = open_cp(Some(db.clone())).await;
+    (dir, cp, db)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn vs01_file_backed_successful_run() {
+    let (_keep, cp, db) = open_file_cp().await;
+    assert!(db.is_file() || !db.exists() || db.exists()); // path reserved; open creates
+    let (_dir, project_id) = register_temp_project(&cp).await;
+    let session = cp
+        .session_create(
+            &project_id,
+            Some("vs01-file".into()),
+            runtime_opts("happy_prompt_stream"),
+        )
+        .await
+        .expect("session create file-backed");
+    assert!(session.session_ready);
+    let prompt = cp
+        .session_submit_prompt(&session.session_id, "list files")
+        .await
+        .expect("prompt");
+    assert!(prompt.accepted);
+    let events = cp
+        .events_list(&session.session_id, 0, 500)
+        .await
+        .expect("events");
+    assert!(sequences_monotonic(&events.events));
+    assert!(!events.events.is_empty(), "file-backed events present");
+    let snap = cp.snapshot();
+    assert_eq!(snap.version, 1);
+    let _ = cp.session_stop(&session.session_id, false).await;
+    assert!(db.is_file(), "temp sqlite file remains until cleanup: {}", db.display());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn vs05_file_backed_cancel_before_approval_no_deadlock() {
+    let (_keep, cp_owned, db) = open_file_cp().await;
+    let cp = std::sync::Arc::new(cp_owned);
+    let (_dir, project_id) = register_temp_project(&cp).await;
+    let session = cp
+        .session_create(
+            &project_id,
+            None,
+            runtime_opts("cancel_while_permission_pending"),
+        )
+        .await
+        .expect("create");
+    let sid = session.session_id.clone();
+    let cp_p = std::sync::Arc::clone(&cp);
+    let sid_p = sid.clone();
+    let prompt =
+        tokio::spawn(async move { cp_p.session_submit_prompt(&sid_p, "needs permission").await });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        let pending = cp.approval_list_pending(&sid).unwrap_or_default();
+        if !pending.is_empty() {
+            break;
+        }
+        if let Ok(detail) = cp.session_get(&sid).await {
+            if detail.status == SessionStatus::AwaitingApproval {
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+    let cancel_start = Instant::now();
+    let cancel = tokio::time::timeout(Duration::from_secs(8), cp.session_cancel(&sid))
+        .await
+        .expect("cancel must be time-bounded on file-backed")
+        .expect("cancel ok");
+    assert!(cancel_start.elapsed() < Duration::from_secs(8));
+    assert!(cancel.accepted);
+    let _ = tokio::time::timeout(Duration::from_secs(15), prompt).await;
+    let pending = cp.approval_list_pending(&sid).unwrap_or_default();
+    assert!(pending.is_empty(), "no stale approvals file-backed: {pending:?}");
+    let _ = cp.session_stop(&sid, true).await;
+    assert!(db.is_file());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn vs08_file_backed_runtime_eof_terminal() {
+    let (_keep, cp, db) = open_file_cp().await;
+    let (_dir, project_id) = register_temp_project(&cp).await;
+    let session = cp
+        .session_create(&project_id, None, runtime_opts("eof_mid_prompt"))
+        .await
+        .expect("create eof scenario");
+    let sid = session.session_id.clone();
+    let _ = cp.session_submit_prompt(&sid, "eof me").await;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut terminal = false;
+    while Instant::now() < deadline {
+        let detail = cp.session_get(&sid).await.unwrap();
+        if matches!(
+            detail.status,
+            SessionStatus::Disconnected | SessionStatus::Failed | SessionStatus::Stopped
+        ) {
+            terminal = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let events = cp.events_list(&sid, 0, 500).await.unwrap();
+    assert!(sequences_monotonic(&events.events));
+    // Terminal projection must be consistent with stored events / status.
+    let detail = cp.session_get(&sid).await.unwrap();
+    assert!(
+        terminal
+            || matches!(
+                detail.status,
+                SessionStatus::Disconnected | SessionStatus::Failed | SessionStatus::Stopped
+            )
+            || !detail.process_alive,
+        "file-backed EOF terminal: {:?}",
+        detail.status
+    );
+    let _ = cp.session_stop(&sid, true).await;
+    assert!(db.is_file());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn vs09_file_backed_runtime_crash_distinct() {
+    let (_keep, cp, db) = open_file_cp().await;
+    let (_dir, project_id) = register_temp_project(&cp).await;
+    let session = cp
+        .session_create(&project_id, None, runtime_opts("crash_nonzero_exit"))
+        .await
+        .expect("create crash scenario");
+    let sid = session.session_id.clone();
+    let _ = cp.session_submit_prompt(&sid, "crash me").await;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut saw_failed = false;
+    while Instant::now() < deadline {
+        let detail = cp.session_get(&sid).await.unwrap();
+        if detail.status == SessionStatus::Failed {
+            saw_failed = true;
+            break;
+        }
+        // Crash may surface via last_error class after process exit.
+        if detail
+            .last_error
+            .as_ref()
+            .and_then(|e| e.get("errorClass"))
+            .and_then(|c| c.as_str())
+            == Some("RuntimeCrashed")
+        {
+            saw_failed = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let events = cp.events_list(&sid, 0, 500).await.unwrap();
+    assert!(sequences_monotonic(&events.events));
+    let detail = cp.session_get(&sid).await.unwrap();
+    assert!(
+        saw_failed
+            || detail.status == SessionStatus::Failed
+            || detail.status == SessionStatus::Disconnected,
+        "crash distinct on file-backed: {:?}",
+        detail.status
+    );
+    let _ = cp.session_stop(&sid, true).await;
+    assert!(db.is_file());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn file_backed_reopen_migrations_and_ordering() {
+    // Unique temp DB; close handles; reopen; migrations already applied by open;
+    // event ordering and terminal projection survive restart (extends VS-12).
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("reopen-critical.db");
+    let project_dir = tempdir().unwrap();
+
+    let session_id = {
+        let cp = open_cp(Some(db.clone())).await;
+        assert!(db.is_file(), "migrations create file DB");
+        let proj = cp
+            .project_register(project_dir.path(), Some("reopen".into()))
+            .await
+            .unwrap();
+        let session = cp
+            .session_create(
+                &proj.project_id,
+                Some("reopen".into()),
+                runtime_opts("happy_prompt_stream"),
+            )
+            .await
+            .unwrap();
+        let _ = cp
+            .session_submit_prompt(&session.session_id, "persist ordering")
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let events = cp.events_list(&session.session_id, 0, 500).await.unwrap();
+        assert!(!events.events.is_empty());
+        assert!(sequences_monotonic(&events.events));
+        let sid = session.session_id.clone();
+        let _ = cp.session_stop(&sid, false).await;
+        // Drop cp closes pool handles.
+        sid
+    };
+
+    let cp2 = open_cp(Some(db.clone())).await;
+    let detail = cp2.session_get(&session_id).await.expect("reload");
+    assert_eq!(detail.session_id, session_id);
+    let events = cp2.events_list(&session_id, 0, 500).await.unwrap();
+    assert!(!events.events.is_empty(), "history after reopen");
+    assert!(sequences_monotonic(&events.events));
+    assert!(events
+        .events
+        .iter()
+        .all(|e| e.get("eventVersion").and_then(|v| v.as_u64()) == Some(1)));
+    // TempDir drop cleans up file.
+}

@@ -137,7 +137,10 @@ npx --yes github:KJ-AIML/heli-harness session close --session heli-ses-08ed6631-
 |---|---|
 | `a28d634084be43359e20e354f8f66f3c8619dcc0` | `docs(w0-d): test strategy, acceptance criteria, failure matrix, specifications` |
 | `c71f19727017c3e441aed8b2cc90ac34a2edcfa5` | `docs(w0-d): completion report` |
-| *(tip after SHA table fix; see git log)* | `docs(w0-d): correct completion report commit SHA` |
+| `5f8c9d6cbc40a4376f4df9a79df36eec86704efa` | `docs(w0-d): correct completion report commit SHA` |
+
+Primary integration review commit: `a28d634084be43359e20e354f8f66f3c8619dcc0`.  
+Branch tip after this table finalization: see `git rev-parse HEAD` on `agent/tracer-w0-test-strategy`.
 
 **Post-rebase base:** `5b936412b982cc4310f1196caef023a968ea070a` (integrated main / Gate 0.1 tip).
 

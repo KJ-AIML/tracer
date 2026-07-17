@@ -1,0 +1,14 @@
+# Rust
+**/target/
+**/*.rs.bk
+Cargo.lock
+
+# Keep workspace-level lock when monorepo lands; ignore nested crate locks for now.
+# (Root workspace will own the single Cargo.lock.)
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

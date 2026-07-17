@@ -1,0 +1,31 @@
+[package]
+name = "tracer-process"
+version = "0.1.0"
+edition = "2021"
+description = "Tracer runtime process manager: spawn, pipes, shutdown, orphan prevention (W1-C)"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+publish = false
+
+[dependencies]
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[[bin]]
+name = "tracer-process-test-helper"
+path = "src/bin/process_test_helper.rs"
+required-features = []
+
+[dev-dependencies]
+# Integration-style unit tests use the helper binary via CARGO_BIN_EXE_*.

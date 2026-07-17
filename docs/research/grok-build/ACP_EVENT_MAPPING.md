@@ -10,6 +10,26 @@ This document distinguishes:
 1. **Standard ACP** — portable across ACP runtimes  
 2. **Vendor (`x.ai/*`)** — Grok/xAI-specific; optional in adapter  
 
+### Normative Tracer event names (Stage 0.1 reconciliation)
+
+Mapping tables in this document use **conceptual** Tracer names for readability (`runtime.initialized`, `message.agent.delta`, `permission.requested`, `turn.started`, etc.).
+
+**Authoritative product event `type` strings** are defined only in:
+
+- `docs/contracts/TRACER_EVENT_PROTOCOL_V1.md`
+
+Wave 1 implementers and contract tests MUST emit and assert W0-A catalog names. Example alignments:
+
+| Wire / concept here | Normative W0-A `type` (examples) |
+|---|---|
+| Successful initialize + caps | `runtime.process.ready` (capabilities in payload) |
+| `agent_message_chunk` | `agent.message.delta` |
+| `session/request_permission` | `approval.requested` / `approval.resolved` |
+| Prompt submit / stream end | `session.prompt.submitted` + agent/session completion events per W0-A |
+| Unknown vendor update | `adapter.protocol.unknown` |
+
+Do not introduce parallel product type strings from this research doc without a formal contract revision.
+
 ## 1. Wire transport
 
 | Property | Value |

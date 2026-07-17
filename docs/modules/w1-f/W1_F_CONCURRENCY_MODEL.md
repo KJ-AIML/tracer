@@ -11,20 +11,28 @@
 
 ```text
 RuntimeAdapter event mpsc (unbounded)
-        │ take_event_receiver (once)
-        ▼
-OS drain thread  ──std::sync::mpsc──►  async persist pump (Tokio)
-        │                                      │
-        │ never drops                          ▼
-        │                               SqliteStorage::append_event
-        │                               (storage sequence authoritative)
-        ▼
-   presentation fan-out (optional)
+        | take_event_receiver (once)
+        v
+OS drain thread  --std::sync::mpsc::sync_channel(BRIDGE_CAPACITY=256)-->  async persist pump (Tokio)
+        |                                      |
+        | continuous drain                     v
+        | (send_timeout backpressure)   SqliteStorage::append_event
+        |                               (storage sequence authoritative)
+        v
+   presentation fan-out (optional, post-persist)
 ```
 
-- Adapter channel is unbounded (W1-D). W1-F drains promptly.
-- Bridge `std::sync::mpsc` is also unbounded for v1 (no intentional drop).
+Mitigation path (Gate 1.3):
+
+```text
+adapter unbounded receiver -> continuously drained -> bounded internal handoff -> immediate persistence -> presentation
+```
+
+- Adapter channel is unbounded (W1-D). W1-F drains promptly into a **bounded** bridge.
+- Bridge is `sync_channel(256)` — not unbounded→unbounded secondary buffering.
+- Full bridge applies backpressure via `send_timeout`; stop flag aborts wait with `try_send`.
 - If storage fails: set `persist_failed`; **do not claim session.completed**.
+- Presentation is after successful persist; disconnected fanout does not block the pump.
 
 ## 3. Prompt / cancel / approve
 

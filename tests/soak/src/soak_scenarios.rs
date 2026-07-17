@@ -134,7 +134,8 @@ async fn soak01_event_burst_beyond_bridge() {
 
     if let Some(m) = metrics {
         assert_eq!(
-            m.persist_errors, thresholds::MAX_EVENT_LOSS,
+            m.persist_errors,
+            thresholds::MAX_EVENT_LOSS,
             "persist errors must be 0 (no silent storage failure path claiming success)"
         );
         // Bridge accepted should cover the burst; W1-D may also emit lifecycle events.
@@ -301,8 +302,7 @@ async fn soak03_slow_presentation_does_not_block_persist() {
     }
     let metrics = cp.session_ingest_metrics(&session.session_id);
     assert!(
-        events.len() as u64 >= 400
-            || metrics.map(|m| m.events_persisted >= 400).unwrap_or(false),
+        events.len() as u64 >= 400 || metrics.map(|m| m.events_persisted >= 400).unwrap_or(false),
         "persistence must continue without presentation reads: events={} metrics={metrics:?}",
         events.len()
     );
@@ -377,12 +377,10 @@ async fn soak04_concurrent_commands() {
         let sid_c = sid1.clone();
         let aid_a = aid.clone();
         let aid_b = aid.clone();
-        let r1 = tokio::spawn(async move {
-            cp_a.approval_resolve(&sid_a, &aid_a, "allow", None).await
-        });
-        let r2 = tokio::spawn(async move {
-            cp_b.approval_resolve(&sid_b, &aid_b, "allow", None).await
-        });
+        let r1 =
+            tokio::spawn(async move { cp_a.approval_resolve(&sid_a, &aid_a, "allow", None).await });
+        let r2 =
+            tokio::spawn(async move { cp_b.approval_resolve(&sid_b, &aid_b, "allow", None).await });
         let r3 = tokio::spawn(async move { cp_c.session_cancel(&sid_c).await });
         let _ = tokio::join!(r1, r2, r3);
     } else {
@@ -439,7 +437,8 @@ async fn soak04_concurrent_commands() {
     let sid3 = s3.session_id.clone();
     let cp_p3 = Arc::clone(&cp);
     let sid_p3 = sid3.clone();
-    let p3 = tokio::spawn(async move { cp_p3.session_submit_prompt(&sid_p3, "shutdown race").await });
+    let p3 =
+        tokio::spawn(async move { cp_p3.session_submit_prompt(&sid_p3, "shutdown race").await });
     tokio::time::sleep(Duration::from_millis(50)).await;
     let shut = tokio::time::timeout(Duration::from_secs(20), cp.shutdown_all())
         .await

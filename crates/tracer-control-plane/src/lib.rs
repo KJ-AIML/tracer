@@ -45,5 +45,5 @@ pub mod types;
 pub use error::{CommandError, ControlPlaneError, ControlPlaneResult};
 pub use heli_bridge::probe_heli;
 pub use plane::{ControlPlane, ControlPlaneConfig};
-pub use session_runtime::{BRIDGE_CAPACITY, IngestMetrics, IngestMetricsSnapshot};
+pub use session_runtime::{IngestMetrics, IngestMetricsSnapshot, BRIDGE_CAPACITY};
 pub use types::*;

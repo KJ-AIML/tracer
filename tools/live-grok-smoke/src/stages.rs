@@ -137,10 +137,7 @@ pub fn run_dry_run(cfg: &RunConfig) -> Result<EvidenceReport, String> {
     // Stage 1: discovery (may probe --version; does not start agent stdio)
     let t0 = Instant::now();
     let disc = discovery::discover_grok(cfg.grok_override.as_deref());
-    let exe = disc
-        .executable
-        .clone()
-        .unwrap_or_else(|| "grok".into());
+    let exe = disc.executable.clone().unwrap_or_else(|| "grok".into());
     report.discovery = Some(disc.clone());
     report.push_stage(stage_evidence(
         StageId::Discovery,
@@ -171,7 +168,11 @@ pub fn run_dry_run(cfg: &RunConfig) -> Result<EvidenceReport, String> {
     let t1 = Instant::now();
     let spec = grok_stdio_spawn_config(&exe, &cfg.cwd);
     let args = tracer_runtime_adapter::grok_stdio_args();
-    let expected = vec!["agent".to_string(), "--no-leader".to_string(), "stdio".to_string()];
+    let expected = vec![
+        "agent".to_string(),
+        "--no-leader".to_string(),
+        "stdio".to_string(),
+    ];
     let args_ok = args == expected && spec.args == expected;
     report.spawn_plan = json!({
         "displayName": spec.display_name,
@@ -223,7 +224,10 @@ pub fn run_dry_run(cfg: &RunConfig) -> Result<EvidenceReport, String> {
             0,
             vec![
                 "dry-run: stage plan validated; not launched".into(),
-                format!("live requires: TRACER_LIVE_GROK=1 + `run` + stage {}", stage.as_str()),
+                format!(
+                    "live requires: TRACER_LIVE_GROK=1 + `run` + stage {}",
+                    stage.as_str()
+                ),
             ],
             None,
             None,
@@ -268,7 +272,9 @@ pub fn run_dry_run(cfg: &RunConfig) -> Result<EvidenceReport, String> {
 /// Discover only (no full dry-run stage matrix beyond discovery).
 pub fn run_discover_only(cfg: &RunConfig) -> Result<EvidenceReport, String> {
     let mut report = run_dry_run(cfg)?;
-    report.notes.push("command=discover: discovery + spawn plan only".into());
+    report
+        .notes
+        .push("command=discover: discovery + spawn plan only".into());
     Ok(report)
 }
 
@@ -535,10 +541,7 @@ pub fn run_live(cfg: &RunConfig) -> Result<EvidenceReport, String> {
             report.scenarios.push(ScenarioResult {
                 id: "LVS-03".into(),
                 status: LiveClassification::Pass,
-                detail: format!(
-                    "authentication state identified: {}",
-                    auth_state.as_str()
-                ),
+                detail: format!("authentication state identified: {}", auth_state.as_str()),
             });
         }
 
@@ -592,7 +595,9 @@ pub fn run_live(cfg: &RunConfig) -> Result<EvidenceReport, String> {
             }
             Err(e) => {
                 let auth_req = format!("{:?}", e.error_class).contains("AuthenticationRequired")
-                    || e.message.to_ascii_lowercase().contains("authentication required");
+                    || e.message
+                        .to_ascii_lowercase()
+                        .contains("authentication required");
                 let status = if auth_req {
                     StageStatus::Blocked
                 } else {
@@ -803,9 +808,7 @@ pub fn run_live(cfg: &RunConfig) -> Result<EvidenceReport, String> {
             }
             if scenario_enabled(cfg, "LVS-06") {
                 let terminal = event_types.iter().any(|t| {
-                    t == "session.completed"
-                        || t == "session.cancelled"
-                        || t == "session.failed"
+                    t == "session.completed" || t == "session.cancelled" || t == "session.failed"
                 });
                 report.scenarios.push(ScenarioResult {
                     id: "LVS-06".into(),
@@ -933,13 +936,11 @@ pub fn run_live(cfg: &RunConfig) -> Result<EvidenceReport, String> {
                     StageId::Approval,
                     StageStatus::Pass,
                     0,
-                    vec![
-                        if saw_approval {
-                            "approval.requested observed — not auto-approved (manual policy)".into()
-                        } else {
-                            "no approval requested during smoke prompt (ok)".into()
-                        },
-                    ],
+                    vec![if saw_approval {
+                        "approval.requested observed — not auto-approved (manual policy)".into()
+                    } else {
+                        "no approval requested during smoke prompt (ok)".into()
+                    }],
                     None,
                     None,
                 ));
@@ -970,7 +971,9 @@ pub fn run_live(cfg: &RunConfig) -> Result<EvidenceReport, String> {
     })();
 
     if let Err(e) = result {
-        report.notes.push(format!("live stage error: {}", sanitize::sanitize_text(&e)));
+        report
+            .notes
+            .push(format!("live stage error: {}", sanitize::sanitize_text(&e)));
     }
 
     // --- Shutdown (always if we started) ---
@@ -1036,8 +1039,7 @@ pub fn run_live(cfg: &RunConfig) -> Result<EvidenceReport, String> {
     {
         report.classification = LiveClassification::BlockedByAuth;
         report.notes.push(
-            "Live parity with authenticated prompt stream is NOT claimed (BLOCKED_BY_AUTH)."
-                .into(),
+            "Live parity with authenticated prompt stream is NOT claimed (BLOCKED_BY_AUTH).".into(),
         );
     }
 
@@ -1109,7 +1111,10 @@ mod tests {
     #[test]
     fn parse_stages() {
         assert_eq!(StageId::parse("initialize").unwrap(), StageId::Initialize);
-        assert_eq!(StageId::parse("auth_requirement").unwrap(), StageId::AuthRequirement);
+        assert_eq!(
+            StageId::parse("auth_requirement").unwrap(),
+            StageId::AuthRequirement
+        );
         assert!(StageId::parse("nope").is_err());
     }
 

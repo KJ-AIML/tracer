@@ -93,7 +93,9 @@ pub async fn open_file_cp() -> (tempfile::TempDir, ControlPlane, PathBuf) {
         heli_probe_path: repo_root(),
         escalate_cancel_to_process_stop: true,
     };
-    let cp = ControlPlane::open(config).await.expect("open control plane");
+    let cp = ControlPlane::open(config)
+        .await
+        .expect("open control plane");
     (dir, cp, db)
 }
 
@@ -106,7 +108,9 @@ pub async fn open_file_cp_at(db: PathBuf) -> ControlPlane {
         heli_probe_path: repo_root(),
         escalate_cancel_to_process_stop: true,
     };
-    ControlPlane::open(config).await.expect("reopen control plane")
+    ControlPlane::open(config)
+        .await
+        .expect("reopen control plane")
 }
 
 pub async fn register_project(cp: &ControlPlane) -> (tempfile::TempDir, String) {

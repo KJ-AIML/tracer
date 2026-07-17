@@ -177,7 +177,9 @@ impl EvidenceReport {
             return;
         }
 
-        let required = ["LVS-01", "LVS-02", "LVS-03", "LVS-04", "LVS-05", "LVS-06", "LVS-07", "LVS-08"];
+        let required = [
+            "LVS-01", "LVS-02", "LVS-03", "LVS-04", "LVS-05", "LVS-06", "LVS-07", "LVS-08",
+        ];
         let all_required_pass = required.iter().all(|id| {
             self.scenarios
                 .iter()

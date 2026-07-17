@@ -72,9 +72,8 @@ fn probe_candidate(path: &Path, source: &str, mut notes: Vec<String>) -> Discove
         which(&display)
     };
 
-    let exists = path.exists()
-        || abs_path.as_ref().map(|a| a.exists()).unwrap_or(false)
-        || source == "path";
+    let exists =
+        path.exists() || abs_path.as_ref().map(|a| a.exists()).unwrap_or(false) || source == "path";
 
     let version = if exists || source == "path" || source == "override" {
         try_version(path).or_else(|| abs_path.as_ref().and_then(|a| try_version(a)))
@@ -89,9 +88,7 @@ fn probe_candidate(path: &Path, source: &str, mut notes: Vec<String>) -> Discove
     }
 
     // Real path for spawn (prefer absolute).
-    let spawn_path = abs_path
-        .clone()
-        .unwrap_or_else(|| path.to_path_buf());
+    let spawn_path = abs_path.clone().unwrap_or_else(|| path.to_path_buf());
 
     // Evidence must not retain raw user home segments.
     let safe_display = crate::sanitize::sanitize_text(&display);
@@ -178,11 +175,7 @@ pub fn which(name: &str) -> Option<PathBuf> {
 
 /// Host platform label for evidence.
 pub fn platform_label() -> String {
-    format!(
-        "{}-{}",
-        env::consts::OS,
-        env::consts::ARCH
-    )
+    format!("{}-{}", env::consts::OS, env::consts::ARCH)
 }
 
 #[cfg(test)]
@@ -193,7 +186,11 @@ mod tests {
     fn stock_args_match_w1d() {
         assert_eq!(
             tracer_runtime_adapter::grok_stdio_args(),
-            vec!["agent".to_string(), "--no-leader".to_string(), "stdio".to_string()]
+            vec![
+                "agent".to_string(),
+                "--no-leader".to_string(),
+                "stdio".to_string()
+            ]
         );
     }
 

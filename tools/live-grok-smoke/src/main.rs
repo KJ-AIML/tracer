@@ -338,15 +338,14 @@ fn guess_repo_root() -> Option<PathBuf> {
 }
 
 fn print_and_write(report: &EvidenceReport, out: Option<&PathBuf>) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(report)
-        .map_err(|e| format!("serialize evidence: {e}"))?;
+    let json =
+        serde_json::to_string_pretty(report).map_err(|e| format!("serialize evidence: {e}"))?;
     // Always print sanitized report to stdout for operators / capture.
     println!("{json}");
     if let Some(path) = out {
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("create evidence dir: {e}"))?;
+                std::fs::create_dir_all(parent).map_err(|e| format!("create evidence dir: {e}"))?;
             }
         }
         std::fs::write(path, &json).map_err(|e| format!("write evidence: {e}"))?;
@@ -372,8 +371,12 @@ mod tests {
 
     #[test]
     fn parses_dry_run() {
-        let cli = parse_args(vec!["dry-run".into(), "--through".into(), "initialize".into()])
-            .expect("parse");
+        let cli = parse_args(vec![
+            "dry-run".into(),
+            "--through".into(),
+            "initialize".into(),
+        ])
+        .expect("parse");
         assert_eq!(cli.command, Command::DryRun);
         assert_eq!(cli.through, Some(StageId::Initialize));
     }
@@ -426,7 +429,10 @@ mod tests {
         };
         let report = run_dry_run(&cfg).expect("dry-run");
         assert_eq!(report.harness, "live-grok-smoke");
-        assert_eq!(report.classification_tier, "manual_local_live_authenticated_smoke");
+        assert_eq!(
+            report.classification_tier,
+            "manual_local_live_authenticated_smoke"
+        );
         assert!(!report.stages.is_empty());
         // Dry-run never launches; overall is NotRun (plan validated) or Pass for construction.
         assert!(matches!(
@@ -436,7 +442,9 @@ mod tests {
         // No stage should claim live process spawn.
         for s in &report.stages {
             assert!(
-                s.notes.iter().any(|n| n.contains("dry-run") || n.contains("not launched"))
+                s.notes
+                    .iter()
+                    .any(|n| n.contains("dry-run") || n.contains("not launched"))
                     || s.status == evidence::StageStatus::Skipped
                     || s.status == evidence::StageStatus::Pass
                     || s.status == evidence::StageStatus::NotRun,

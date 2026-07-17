@@ -111,7 +111,13 @@ W1-D standard acceptance evidence is fake-runtime complete; live Grok remains op
 
 ## 9. Commits
 
-(Filled after local commit.)
+| SHA | Message |
+|---|---|
+| `128f887d4b3193a74e5c9ca3d5664b07b5fff39e` | feat(w1-d): ACP client and runtime adapter against fake ACP |
+| (this docs tip) | docs(w1-d): record completion commit SHA |
+
+**Base:** `bfcd205832fd9befa9d78dd204cb6916c7ad6385`  
+**Tip:** see `git rev-parse HEAD` after docs amend/commit (not pushed).
 
 ## 10. Explicit non-starts
 

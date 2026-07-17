@@ -1,0 +1,24 @@
+{
+  "name": "@tracer/fake-acp-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic fake ACP-compatible stdio runtime for Tracer CI (W1-G). No network.",
+  "type": "module",
+  "bin": {
+    "fake-acp-runtime": "./bin/fake-acp-runtime.js"
+  },
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./scenarios": "./src/scenarios.js",
+    "./constants": "./src/constants.js"
+  },
+  "scripts": {
+    "start": "node ./bin/fake-acp-runtime.js",
+    "list-scenarios": "node ./bin/fake-acp-runtime.js --list-scenarios"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

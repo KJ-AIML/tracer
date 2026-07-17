@@ -1,4 +1,4 @@
-# W1-B Completion Report — Domain and Event Protocol
+# W1-B Completion Report â€” Domain and Event Protocol
 
 **Work item:** W1-B  
 **Task ID:** `tracer-w1-domain-events`  
@@ -14,7 +14,7 @@
 | Field | Value |
 |---|---|
 | **W1-B module** | **COMPLETE** (domain types + event protocol packages + contract fixtures) |
-| Gate 1 vertical slice | Not claimed — foundation only |
+| Gate 1 vertical slice | Not claimed â€” foundation only |
 | Shared manifests edited | **No** (forbidden); requests documented |
 
 ## 2. Owned vs forbidden (reaffirmed)
@@ -49,7 +49,7 @@
 | `session` | Status catalog + transition graph + terminal helpers |
 | `auth` | Authentication states + prompt gate |
 | `capabilities` | Negotiated caps + unknown vendor key preservation |
-| `error` | `ErrorClass`, `ErrorCategory` (protocol/process/authentication/permission/storage/…), `TracerError` |
+| `error` | `ErrorClass`, `ErrorCategory` (protocol/process/authentication/permission/storage/â€¦), `TracerError` |
 | `adapter` | Adapter metadata + `extensions` for vendor preserve |
 | `payload` | Builders for common payloads; tool/approval/plan enums |
 | `validate` | Semantic envelope + stream validation |
@@ -64,12 +64,12 @@
 
 ### 3.3 Contract fixtures (`tests/contract/event-protocol/fixtures/`)
 
-| Fixture | Covers protocol §10 corpus item |
+| Fixture | Covers protocol Â§10 corpus item |
 |---|---|
 | `happy_prompt_stream.json` | Happy-path stream |
 | `tool_with_approval.json` | Tool + approval request/resolve |
-| `unknown_vendor_notification.json` | Unknown notification → `adapter.protocol.unknown` |
-| `protocol_error.json` | Malformed → `adapter.protocol.error` |
+| `unknown_vendor_notification.json` | Unknown notification â†’ `adapter.protocol.unknown` |
+| `protocol_error.json` | Malformed â†’ `adapter.protocol.error` |
 | `cancel_mid_tool.json` | Cancel mid-tool |
 | `unexpected_process_exit.json` | Unexpected process exit mid-run |
 | Replay covered in tests | Sort by `sequence` after reverse |
@@ -100,7 +100,7 @@ npm test
 See [`SHARED_MANIFEST_REQUESTS.md`](./SHARED_MANIFEST_REQUESTS.md):
 
 - Root Cargo workspace member: `crates/tracer-domain`
-- pnpm workspace package: `packages/event-types` → `@tracer/event-types`
+- pnpm workspace package: `packages/event-types` â†’ `@tracer/event-types`
 
 ## 6. Additive contract notes (not contract rewrites)
 
@@ -124,16 +124,15 @@ as stable `ErrorClass` values mapped to category `authentication`.
 
 | Item | Status |
 |---|---|
-| Missing root Cargo/pnpm workspace | **Non-blocking** — packages test standalone; integrator wiring documented |
+| Missing root Cargo/pnpm workspace | **Non-blocking** â€” packages test standalone; integrator wiring documented |
 | Fake ACP / adapter | Out of scope (W1-D / W1-G) |
 
 ## 9. Commit SHAs
 
-_Filled after local commit in this report's follow-up edit or git log._
 
 | SHA | Message |
 |---|---|
-| _(see git log on branch)_ | `feat(w1-b): domain types and event protocol v1 packages` |
+| `eb17ce04ed6843868d3b8e0d3a2a816545acfe76` | `feat(w1-b): domain types and event protocol v1 packages` |
 
 ## 10. Handoff
 

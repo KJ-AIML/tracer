@@ -30,10 +30,12 @@ Wave 0 architecture and contracts for the Tracer vertical slice are committed un
 
 | SHA | Message |
 |---|---|
-| `7bf772559258de2aca54390dcca3949d316581bb` | `docs(w0-a): architecture contracts and ADRs for vertical slice` |
-| `319c6e041177f42d11058722861c124427b3188d` | `docs(w0-a): add W0-A completion report` |
+| `7bf772559258de2aca54390dcca3949d316581bb` | `docs(w0-a): architecture contracts and ADRs for vertical slice` (6 contract/ADR files) |
+| `d76bcdb7164b7dd11cef66241d1f354c6e545d16` | `docs(w0-a): add W0-A completion report` (first report commit) |
+| *(see git log tip)* | Subsequent report SHA corrections may supersede the report-only commit |
 
-Branch tip includes both commits above. Base was `0301a74` (initial LICENSE commit).
+Primary deliverable commit for integration review: `7bf772559258de2aca54390dcca3949d316581bb`.  
+Branch base: `0301a74` (initial LICENSE). Use `git log --oneline 0301a74..HEAD` on branch `agent/tracer-w0-architecture-contracts` for tip.
 
 ## Commands run
 

@@ -259,8 +259,8 @@ No new ADR. Existing:
 | W0-A merge | `05f29518a522e3707700b30b8ebecfb116fe2dce` |
 | W0-B merge | `da9ccacc81af605a2373028ea5d27b8eac6afa85` |
 | Integration report + reconciliation (initial) | `c0b37a0ad04ccb6c7b5438d12cb4e43b2ecd7be9` |
-| SHA table commit | `337447573ff4d6d8c052a77093ad6404bfee16a3` |
-| Final `main` | `226d8348dd0ad38176c360ba6761b954dd172ed9` |
+| Post-merge SHA table updates | `3374475` … through tip of `main` |
+| Final `main` tip | Use `git rev-parse main` after integration close (completion report records the exact tip SHA) |
 | Gate 0.1 | **PASS** |
 
 ## 13. What was not done

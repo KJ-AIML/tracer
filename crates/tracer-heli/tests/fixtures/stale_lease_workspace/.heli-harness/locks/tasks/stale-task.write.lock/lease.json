@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "leaseId": "heli-lease-stale",
+  "taskId": "stale-task",
+  "sessionId": "heli-ses-stale",
+  "mode": "write",
+  "worktreePath": "d:/fixture/stale-wt",
+  "acquiredAt": "2020-01-01T00:00:00.000Z",
+  "lastActivityAt": "2020-01-01T00:00:00.000Z",
+  "expiresAt": "2020-01-01T01:00:00.000Z",
+  "ttlSeconds": 3600,
+  "revision": 1
+}

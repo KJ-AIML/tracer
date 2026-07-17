@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "taskId": "stale-task",
+  "title": "stale",
+  "status": "active",
+  "source": {},
+  "target": {
+    "repositoryId": "tracer",
+    "worktreePath": "d:/fixture/stale-wt"
+  },
+  "mode": "strict",
+  "pathClaims": {
+    "owns": [],
+    "reads": [],
+    "shared": [],
+    "forbidden": []
+  },
+  "yolo": {
+    "enabled": false
+  }
+}

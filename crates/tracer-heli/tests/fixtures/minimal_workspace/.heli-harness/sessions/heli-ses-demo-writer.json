@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "heli-ses-demo-writer",
+  "externalHostSessionId": null,
+  "host": "grok-build",
+  "taskId": "tracer-w1-demo",
+  "mode": "write",
+  "worktreePath": "d:/fixture/demo-worktree",
+  "status": "active",
+  "yolo": { "enabled": false },
+  "createdAt": "2026-07-17T00:00:00.000Z",
+  "lastSeenAt": "2026-07-17T01:00:00.000Z",
+  "closedAt": null
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "targetRepo": "tracer",
+  "targetGitRoot": "repos/tracer",
+  "writesAllowedUnder": "repos/tracer",
+  "activeProfile": "",
+  "selectedAt": "2026-07-17T00:00:00.000Z",
+  "selectedBy": "fixture",
+  "reason": "fixture target",
+  "note": "Not authoritative in concurrent mode; task target is source of truth."
+}

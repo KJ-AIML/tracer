@@ -13,10 +13,10 @@
 RuntimeAdapter event mpsc (unbounded)
         | take_event_receiver (once)
         v
-OS drain thread  --std::sync::mpsc::sync_channel(BRIDGE_CAPACITY=256)-->  async persist pump (Tokio)
+OS drain thread  --tokio::sync::mpsc (BRIDGE_CAPACITY=256)-->  async persist pump (Tokio)
         |                                      |
         | continuous drain                     v
-        | (try_send+sleep backpressure)   SqliteStorage::append_event
+        | (Sender::blocking_send)       SqliteStorage::append_event
         |                               (storage sequence authoritative)
         v
    presentation fan-out (optional, post-persist)
@@ -29,8 +29,9 @@ adapter unbounded receiver -> continuously drained -> bounded internal handoff -
 ```
 
 - Adapter channel is unbounded (W1-D). W1-F drains promptly into a **bounded** bridge.
-- Bridge is `sync_channel(256)` â€” not unboundedâ†’unbounded secondary buffering.
-- Full bridge applies backpressure via `try_send+sleep`; stop flag aborts wait with `try_send`.
+- Bridge is `tokio::sync::mpsc::channel(256)` — not unbounded->unbounded secondary buffering.
+- Full bridge applies backpressure via `blocking_send`; stop uses `try_send` to remain responsive.
+- Async pump awaits `recv` (does not block Tokio workers on `std::mpsc::recv`).
 - If storage fails: set `persist_failed`; **do not claim session.completed**.
 - Presentation is after successful persist; disconnected fanout does not block the pump.
 

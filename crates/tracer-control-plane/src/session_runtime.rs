@@ -7,37 +7,29 @@
 //! ```text
 //! adapter unbounded receiver
 //!     -> OS drain thread (continuous)
-//!     -> bounded sync_channel handoff (BRIDGE_CAPACITY)
+//!     -> bounded tokio mpsc handoff (BRIDGE_CAPACITY)
 //!     -> async persist pump -> SqliteStorage::append_event
 //!     -> optional presentation fan-out (after persist)
 //! ```
 //!
 //! Bounded handoff applies backpressure when SQLite is slow so W1-F does not
-//! add a second unbounded buffer. Drain uses try_send+sleep so stop remains
-//! responsive if the bridge is full. Presentation is post-persist and must not
-//! block the adapter channel indefinitely.
+//! add a second unbounded buffer. Drain uses `Sender::blocking_send` (Tokio)
+//! so the async pump never blocks a worker on `std::mpsc::recv`. Presentation
+//! is post-persist and must not block the adapter channel indefinitely.
 //!
-//! This split avoids `Handle::block_on` / `spawn_blocking` deadlocks while
-//! keeping ingestion alive during blocking `submit_prompt`, pending approval,
-//! and cancel. No lock is held across long-running adapter RPCs.
+//! This split avoids `Handle::block_on` deadlocks while keeping ingestion
+//! alive during blocking `submit_prompt`, pending approval, and cancel. No
+//! lock is held across long-running adapter RPCs.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{
-    self, Receiver as StdReceiver, RecvTimeoutError, Sender as StdSender, SyncSender,
-    TrySendError,
-};
+use std::sync::mpsc::{self, Receiver as StdReceiver, Sender as StdSender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-/// Bounded internal handoff between OS drain and async persist pump.
-/// Keeps adapter drain continuous while preventing unbounded->unbounded growth.
-const BRIDGE_CAPACITY: usize = 256;
-/// Sleep while bridge is full before retrying try_send.
-const BRIDGE_BACKPRESSURE_SLEEP: Duration = Duration::from_millis(10);
-
 use serde_json::Value;
+use tokio::sync::mpsc::{channel as tokio_channel, Receiver as TokioReceiver, Sender as TokioSender};
 use tracer_domain::{AuthenticationState, SessionStatus};
 use tracer_runtime_adapter::{
     AdapterEvent, ApprovalDecisionRequest, PromptRequest, RuntimeAdapter, ShutdownOptions,
@@ -50,6 +42,10 @@ use crate::convert::{
     status_hint_from_event_type,
 };
 use crate::types::{PendingApprovalView, PresentationEvent};
+
+/// Bounded internal handoff between OS drain and async persist pump.
+/// Keeps adapter drain continuous while preventing unbounded->unbounded growth.
+const BRIDGE_CAPACITY: usize = 256;
 
 /// Shared mutable session runtime state (not held across adapter RPCs for cancel).
 #[derive(Debug)]
@@ -139,8 +135,8 @@ impl LiveSession {
             }
         };
 
-        // Bounded bridge: adapter unbounded -> sync_channel -> async pump.
-        let (bridge_tx, bridge_rx) = mpsc::sync_channel::<AdapterEvent>(BRIDGE_CAPACITY);
+        // Bounded bridge: adapter unbounded -> tokio mpsc(BRIDGE_CAPACITY) -> async pump.
+        let (bridge_tx, bridge_rx) = tokio_channel::<AdapterEvent>(BRIDGE_CAPACITY);
         let stop = Arc::clone(&self.stop_ingest);
         let sid = self.session_id;
 
@@ -201,13 +197,14 @@ impl Drop for LiveSession {
 
 fn drain_adapter(
     rx: StdReceiver<AdapterEvent>,
-    tx: SyncSender<AdapterEvent>,
+    tx: TokioSender<AdapterEvent>,
     stop: Arc<AtomicBool>,
     session_id: SessionId,
 ) {
     debug!(session = %session_id, "adapter drain started");
     loop {
         if stop.load(Ordering::SeqCst) {
+            // Best-effort non-blocking flush on stop.
             while let Ok(ev) = rx.try_recv() {
                 if tx.try_send(ev).is_err() {
                     break;
@@ -217,35 +214,26 @@ fn drain_adapter(
         }
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(ev) => {
-                let mut pending = Some(ev);
-                while let Some(item) = pending.take() {
-                    match tx.try_send(item) {
-                        Ok(()) => {}
-                        Err(TrySendError::Full(held)) => {
-                            if stop.load(Ordering::SeqCst) {
-                                let _ = tx.try_send(held);
-                                debug!(session = %session_id, "adapter drain stopped (stop while full)");
-                                return;
-                            }
-                            thread::sleep(BRIDGE_BACKPRESSURE_SLEEP);
-                            pending = Some(held);
-                        }
-                        Err(TrySendError::Disconnected(_)) => {
-                            debug!(session = %session_id, "adapter drain stopped (bridge closed)");
-                            return;
-                        }
-                    }
+                // blocking_send applies backpressure without Handle::block_on.
+                // On stop, try_send to avoid hanging if the pump is full.
+                if stop.load(Ordering::SeqCst) {
+                    let _ = tx.try_send(ev);
+                    break;
+                }
+                if tx.blocking_send(ev).is_err() {
+                    break;
                 }
             }
-            Err(RecvTimeoutError::Timeout) => continue,
-            Err(RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
     debug!(session = %session_id, "adapter drain stopped");
+    // Dropping tx closes bridge for async pump.
 }
 
 async fn async_persist_pump(
-    rx: StdReceiver<AdapterEvent>,
+    mut rx: TokioReceiver<AdapterEvent>,
     stop: Arc<AtomicBool>,
     state: Arc<Mutex<SessionRuntimeState>>,
     session_id: SessionId,
@@ -255,43 +243,29 @@ async fn async_persist_pump(
 ) {
     debug!(session = %session_id, "async persist pump started");
     loop {
-        // Non-blocking batch drain of the bridge.
-        let mut batch = Vec::new();
-        while let Ok(ev) = rx.try_recv() {
-            batch.push(ev);
-        }
-
-        if batch.is_empty() {
-            if stop.load(Ordering::SeqCst) {
-                // Final try
-                while let Ok(ev) = rx.try_recv() {
-                    batch.push(ev);
-                }
-                if batch.is_empty() {
-                    break;
-                }
-            } else {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-                // Detect closed bridge: try_recv empty + disconnect.
-                // std mpsc doesn't expose is_disconnected without recv; use timeout recv.
-                match rx.recv_timeout(Duration::from_millis(5)) {
-                    Ok(ev) => batch.push(ev),
-                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+        tokio::select! {
+            biased;
+            maybe = rx.recv() => {
+                match maybe {
+                    Some(ev) => {
+                        persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
+                        // Drain any already-queued events without yielding extra.
                         while let Ok(ev) = rx.try_recv() {
-                            batch.push(ev);
-                        }
-                        for ev in batch {
                             persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
                         }
-                        break;
                     }
+                    None => break,
                 }
             }
-        }
-
-        for ev in batch {
-            persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
+            _ = tokio::time::sleep(Duration::from_millis(50)), if stop.load(Ordering::SeqCst) => {
+                // Stop requested: finish remaining then exit.
+                while let Ok(ev) = rx.try_recv() {
+                    persist_one(&ev, &state, session_id, &storage, &fanout, &adapter).await;
+                }
+                if rx.is_empty() {
+                    break;
+                }
+            }
         }
     }
     debug!(session = %session_id, "async persist pump stopped");

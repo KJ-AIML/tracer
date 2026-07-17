@@ -1,4 +1,4 @@
-﻿# WAVE 1.4 Hardening Report — Gate 1.4 (VS1 Hardening Integration)
+# WAVE 1.4 Hardening Report — Gate 1.4 (VS1 Hardening Integration)
 
 **Gate:** 1.4  
 **Branch:** `integration/tracer-vs1-hardening`  
@@ -44,7 +44,8 @@
 |---|---|
 | `3152951` (H1 merge body) | Cargo.toml workspace member **union**: `tests/soak`, `tests/stress`, `tools/live-grok-smoke` |
 | `a2fed0458f79f62cf78af89758820004bf76441f` | rustfmt after H3/H2/H1 integration |
-| (this reports commit) | sticky persist_failed isolation test + Gate 1.4 artifacts |
+| `40cf53dddcf495a23d06606fe0778cf894c8a8ad` | sticky persist_failed isolation test (SOAK-07) |
+| `432eec519f792a8567f111a76455e0df9eacbec8` | Gate 1.4 reports (hardening, matrix, readiness, Wave 2 entry) |
 
 No squash of source branches. Desktop TS aliases and live-smoke CI exclusion required no further mechanical conflict resolution beyond Cargo.toml union.
 
@@ -206,3 +207,13 @@ See `docs/integration/WAVE_2_ENTRY_CRITERIA.md`. Gate 1.4 **allows** Wave 2 plan
 | Local annotated tag `tracer-vs1-hardened` | (finalize step) |
 | Push | **Never** |
 | Heli lease release | (finalize step) |
+
+---
+
+## Final SHAs (post-report amend)
+
+| Item | SHA |
+|---|---|
+| Integration tip (pre-FF) | `432eec519f792a8567f111a76455e0df9eacbec8` |
+| Sticky test commit | `40cf53dddcf495a23d06606fe0778cf894c8a8ad` |
+| Reports commit | `432eec519f792a8567f111a76455e0df9eacbec8` |

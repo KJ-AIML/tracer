@@ -61,7 +61,7 @@
 |---|---|
 | `7a55f02131087b7796d5135a53a456a0ff5f285a` | `chore(w1.1): root Cargo/pnpm workspace wiring and shared manifests` |
 | `4ac4e11b091ab9a0501f470092c172f7eaa04953` | `fix(w1.1): adopt tracer-domain IDs/status in storage; shell uses event-types` |
-| *(reports commit)* | `docs(w1.1): Gate 1.1 integration report, test matrix, Wave 1.2 readiness` |
+| `c65959a09a315c449a27773996d6bdcd9b332770` | `docs(w1.1): Gate 1.1 integration report, test matrix, Wave 1.2 readiness` |
 
 ## 6. Conflicts and reconciliations
 

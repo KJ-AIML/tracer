@@ -104,8 +104,10 @@ impl ControlPlane {
         }
 
         let heli = probe_heli(&config.heli_probe_path);
-        let mut snapshot = PresentationSnapshot::default();
-        snapshot.heli = heli;
+        let snapshot = PresentationSnapshot {
+            heli,
+            ..PresentationSnapshot::default()
+        };
 
         Ok(Self {
             storage,
@@ -409,9 +411,8 @@ impl ControlPlane {
                     st.last_error = Some(error_payload(e.error_class.as_str(), &e.message));
                     if e.error_class == ErrorClass::AuthenticationRequired {
                         st.status = SessionStatus::StartingRuntime; // process ready, not session ready
-                    } else if e.error_class == ErrorClass::AuthenticationFailed {
-                        st.status = SessionStatus::Failed;
                     } else {
+                        // AuthenticationFailed and other create failures share Failed.
                         st.status = SessionStatus::Failed;
                     }
                     st.status
@@ -678,9 +679,7 @@ impl ControlPlane {
                 {
                     let mut st = live.state.lock().expect("state");
                     st.prompt_in_flight = false;
-                    if mode == "process_stop" {
-                        st.status = SessionStatus::Stopped;
-                    } else if st.status == SessionStatus::Cancelling {
+                    if mode == "process_stop" || st.status == SessionStatus::Cancelling {
                         st.status = SessionStatus::Stopped;
                     }
                     st.pending_approvals.clear();

@@ -29,17 +29,17 @@ fn map_err(e: ControlPlaneError) -> String {
 
 #[tauri::command]
 pub fn tracer_app_info(state: State<'_, PlaneState>) -> Result<Value, String> {
-    Ok(serde_json::to_value(state.plane.app_info()).map_err(|e| e.to_string())?)
+    serde_json::to_value(state.plane.app_info()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn tracer_presentation_snapshot(state: State<'_, PlaneState>) -> Result<Value, String> {
-    Ok(serde_json::to_value(state.plane.snapshot()).map_err(|e| e.to_string())?)
+    serde_json::to_value(state.plane.snapshot()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn tracer_heli_status(state: State<'_, PlaneState>) -> Result<Value, String> {
-    Ok(serde_json::to_value(state.plane.refresh_heli()).map_err(|e| e.to_string())?)
+    serde_json::to_value(state.plane.refresh_heli()).map_err(|e| e.to_string())
 }
 
 // --- Projects ---
@@ -68,13 +68,6 @@ pub async fn tracer_project_register(
 pub async fn tracer_project_list(state: State<'_, PlaneState>) -> Result<Value, String> {
     let projects = state.plane.project_list().await.map_err(map_err)?;
     Ok(json!({ "projects": projects }))
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IdArgs {
-    pub project_id: Option<String>,
-    pub session_id: Option<String>,
 }
 
 #[tauri::command]
@@ -164,7 +157,7 @@ pub async fn tracer_session_submit_prompt(
         .session_submit_prompt(&args.session_id, &args.text)
         .await
         .map_err(map_err)?;
-    Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
+    serde_json::to_value(result).map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,7 +178,7 @@ pub async fn tracer_session_cancel(
         .session_cancel(&args.session_id)
         .await
         .map_err(map_err)?;
-    Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
+    serde_json::to_value(result).map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -231,7 +224,7 @@ pub async fn tracer_events_list(
         )
         .await
         .map_err(map_err)?;
-    Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
+    serde_json::to_value(result).map_err(|e| e.to_string())
 }
 
 // --- Approvals ---

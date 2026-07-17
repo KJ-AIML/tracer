@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use tempfile::tempdir;
 use tracer_control_plane::{
     probe_heli, CommandError, ControlPlane, ControlPlaneConfig, ControlPlaneError,
@@ -16,11 +16,11 @@ use tracer_domain::{ErrorClass, SessionStatus};
 use tracer_storage::{open_database, OpenOptions, SqliteStorage};
 
 /// Serialize fake-ACP VS scenarios (parallel node spawns contend under Windows).
-fn vs_lock() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
+async fn vs_lock() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .await
 }
 
 fn repo_root() -> PathBuf {
@@ -108,7 +108,7 @@ fn sequences_monotonic(events: &[serde_json::Value]) -> bool {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs01_successful_run() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
 
@@ -184,7 +184,7 @@ async fn vs01_successful_run() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs02_authentication_required() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
 
@@ -234,7 +234,7 @@ async fn vs02_authentication_required() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs03_authentication_failure_distinct() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     // Class identity is distinct at the command surface.
     let required =
         ControlPlaneError::from_class(ErrorClass::AuthenticationRequired, "auth required")
@@ -255,7 +255,7 @@ async fn vs03_authentication_failure_distinct() {
     let sid = &sessions[0].session_id;
     // Fake authenticate is typically no-op success; either way class must not collapse.
     match cp.authenticate(sid, Some("unknown-method".into())).await {
-        Ok(()) => {
+        Ok(_prompt_ok) => {
             // Still distinct from AuthenticationRequired class used above.
             assert_eq!(required.error_class, "AuthenticationRequired");
         }
@@ -282,7 +282,7 @@ async fn vs03_authentication_failure_distinct() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs04_unsupported_capability_controlled() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     // Minimal capabilities still allow controlled session create (no crash).
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
@@ -331,7 +331,7 @@ async fn vs04_unsupported_capability_controlled() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs05_cancel_before_approval_no_deadlock() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = std::sync::Arc::new(open_cp(None).await);
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -396,7 +396,7 @@ async fn vs05_cancel_before_approval_no_deadlock() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs06_approval_accepted_once() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = std::sync::Arc::new(open_cp(None).await);
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -443,7 +443,7 @@ async fn vs06_approval_accepted_once() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs07_approval_rejected_once() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = std::sync::Arc::new(open_cp(None).await);
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -484,7 +484,7 @@ async fn vs07_approval_rejected_once() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs08_runtime_eof_terminal() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = std::sync::Arc::new(open_cp(None).await);
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -499,34 +499,37 @@ async fn vs08_runtime_eof_terminal() {
     let detail = cp.session_get(&sid).await.unwrap();
     let events = cp.events_list(&sid, 0, 200).await.unwrap();
 
-    if result.is_ok() {
-        // If adapter returned ok, events must still not claim dishonest complete-only.
-        // Prefer failed/disconnected status after EOF mid-prompt.
-        assert!(
-            matches!(
-                detail.status,
-                SessionStatus::Failed
-                    | SessionStatus::Disconnected
-                    | SessionStatus::Stopped
-                    | SessionStatus::Ready
-            ),
-            "status after EOF: {:?}",
-            detail.status
-        );
-    } else {
-        let err = result.unwrap_err().to_command_error();
-        assert!(
-            err.error_class == "RuntimeDisconnected"
-                || err.error_class == "RuntimeCrashed"
-                || err.error_class == "RuntimeNotReady"
-                || err.error_class == "ProtocolParseError"
-                || err.error_class == "Timeout"
-                || err.error_class == "PromptRejected"
-                || err.error_class == "InternalError"
-                || err.error_class == "InvalidState",
-            "EOF class: {}",
-            err.error_class
-        );
+    match result {
+        Ok(_prompt_ok) => {
+            // If adapter returned ok, events must still not claim dishonest complete-only.
+            // Prefer failed/disconnected status after EOF mid-prompt.
+            assert!(
+                matches!(
+                    detail.status,
+                    SessionStatus::Failed
+                        | SessionStatus::Disconnected
+                        | SessionStatus::Stopped
+                        | SessionStatus::Ready
+                ),
+                "status after EOF: {:?}",
+                detail.status
+            );
+        }
+        Err(e) => {
+            let err = e.to_command_error();
+            assert!(
+                err.error_class == "RuntimeDisconnected"
+                    || err.error_class == "RuntimeCrashed"
+                    || err.error_class == "RuntimeNotReady"
+                    || err.error_class == "ProtocolParseError"
+                    || err.error_class == "Timeout"
+                    || err.error_class == "PromptRejected"
+                    || err.error_class == "InternalError"
+                    || err.error_class == "InvalidState",
+                "EOF class: {}",
+                err.error_class
+            );
+        }
     }
     // Must not only have session.completed without failure/disconnect signal when mid-prompt EOF.
     let _ = events;
@@ -539,7 +542,7 @@ async fn vs08_runtime_eof_terminal() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs09_runtime_crash_distinct() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -579,7 +582,7 @@ async fn vs09_runtime_crash_distinct() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs10_malformed_protocol_distinct() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -620,7 +623,7 @@ async fn vs10_malformed_protocol_distinct() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs11_unknown_vendor_preserved() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -665,7 +668,7 @@ async fn vs11_unknown_vendor_preserved() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs12_restart_restores_history() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let dir = tempdir().unwrap();
     let db = dir.path().join("tracer.db");
     let project_dir = tempdir().unwrap();
@@ -716,7 +719,7 @@ async fn vs12_restart_restores_history() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs13_interrupted_session_recovery() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let dir = tempdir().unwrap();
     let db = dir.path().join("tracer.db");
     let project_dir = tempdir().unwrap();
@@ -770,7 +773,7 @@ async fn vs13_interrupted_session_recovery() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs14_heli_unavailable_runtime_usable() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     // Probe a path with no heli workspace.
     let empty = tempdir().unwrap();
     let view = probe_heli(empty.path());
@@ -814,7 +817,7 @@ async fn vs14_heli_unavailable_runtime_usable() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failure_catalog_binary_missing() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let (_dir, project_id) = register_temp_project(&cp).await;
     let mut opts = runtime_opts("happy_prompt_stream");
@@ -842,7 +845,7 @@ fn command_error_serde_shape() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn app_info_and_project_list() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let cp = open_cp(None).await;
     let info = cp.app_info();
     assert_eq!(info.event_protocol_version, 1);
@@ -881,7 +884,7 @@ async fn open_file_cp() -> (tempfile::TempDir, ControlPlane, PathBuf) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs01_file_backed_successful_run() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let (_keep, cp, db) = open_file_cp().await;
     assert!(db.is_file() || !db.exists() || db.exists()); // path reserved; open creates
     let (_dir, project_id) = register_temp_project(&cp).await;
@@ -917,7 +920,7 @@ async fn vs01_file_backed_successful_run() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs05_file_backed_cancel_before_approval_no_deadlock() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let (_keep, cp_owned, db) = open_file_cp().await;
     let cp = std::sync::Arc::new(cp_owned);
     let (_dir, project_id) = register_temp_project(&cp).await;
@@ -966,7 +969,7 @@ async fn vs05_file_backed_cancel_before_approval_no_deadlock() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs08_file_backed_runtime_eof_terminal() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let (_keep, cp, db) = open_file_cp().await;
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -1008,7 +1011,7 @@ async fn vs08_file_backed_runtime_eof_terminal() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn vs09_file_backed_runtime_crash_distinct() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     let (_keep, cp, db) = open_file_cp().await;
     let (_dir, project_id) = register_temp_project(&cp).await;
     let session = cp
@@ -1054,7 +1057,7 @@ async fn vs09_file_backed_runtime_crash_distinct() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn file_backed_reopen_migrations_and_ordering() {
-    let _vs_serial = vs_lock();
+    let _vs_serial = vs_lock().await;
     // Unique temp DB; close handles; reopen; migrations already applied by open;
     // event ordering and terminal projection survive restart (extends VS-12).
     let dir = tempdir().unwrap();

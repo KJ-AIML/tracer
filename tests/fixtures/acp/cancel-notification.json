@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/cancel",
+  "params": {
+    "sessionId": "11111111-1111-4111-8111-111111111111",
+    "_meta": {
+      "cancelSubagents": true,
+      "rewindIfPristine": false,
+      "cancelTrigger": "user"
+    }
+  },
+  "_fixture": {
+    "source": "synthetic",
+    "notes": [
+      "ACP cancel is a notification (no response id required)",
+      "Defaults in Grok: cancelSubagents=true when omitted"
+    ]
+  }
+}

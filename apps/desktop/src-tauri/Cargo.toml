@@ -1,0 +1,27 @@
+[package]
+name = "tracer-desktop"
+version = "0.1.0"
+description = "Tracer desktop shell (W1-A minimal Tauri bootstrap; control plane owned by W1-F)"
+authors = ["Tracer"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "tracer_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+# NOTE: Do not add SQLite migrations or business logic here.
+# migrations/ is owned by W1-E; command surface composition by W1-F.

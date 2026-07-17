@@ -1,0 +1,261 @@
+/* Tracer UI design tokens + baseline component styles (W1-A) */
+
+:root {
+  /* Neutral surfaces */
+  --tracer-color-bg: #0f1218;
+  --tracer-color-surface: #171b24;
+  --tracer-color-surface-elevated: #1e2430;
+  --tracer-color-border: #2c3444;
+  --tracer-color-text: #e8ecf4;
+  --tracer-color-text-muted: #9aa6bc;
+  --tracer-color-text-inverse: #0f1218;
+
+  /* Semantic roles — always pair with text/icon, never color-only */
+  --tracer-color-neutral: #8b95a8;
+  --tracer-color-info: #5b9fff;
+  --tracer-color-success: #3ecf8e;
+  --tracer-color-warning: #f0b429;
+  --tracer-color-danger: #f07178;
+  --tracer-color-focus: #7eb6ff;
+
+  /* Spacing */
+  --tracer-space-1: 4px;
+  --tracer-space-2: 8px;
+  --tracer-space-3: 12px;
+  --tracer-space-4: 16px;
+  --tracer-space-5: 20px;
+  --tracer-space-6: 24px;
+  --tracer-space-8: 32px;
+
+  /* Typography */
+  --tracer-font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --tracer-font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  --tracer-font-size-sm: 12px;
+  --tracer-font-size-md: 14px;
+  --tracer-font-size-lg: 16px;
+  --tracer-font-size-xl: 20px;
+  --tracer-line-height: 1.45;
+
+  /* Radii / elevation */
+  --tracer-radius-sm: 4px;
+  --tracer-radius-md: 8px;
+  --tracer-radius-lg: 12px;
+  --tracer-shadow-banner: 0 1px 0 rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
+}
+
+.tracer-ui {
+  font-family: var(--tracer-font-sans);
+  font-size: var(--tracer-font-size-md);
+  line-height: var(--tracer-line-height);
+  color: var(--tracer-color-text);
+}
+
+/* —— StatusChip —— */
+.tracer-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tracer-space-2);
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--tracer-color-border);
+  background: var(--tracer-color-surface-elevated);
+  font-size: var(--tracer-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tracer-status-chip__icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.tracer-status-chip--neutral {
+  border-color: color-mix(in srgb, var(--tracer-color-neutral) 45%, var(--tracer-color-border));
+  color: var(--tracer-color-text);
+}
+.tracer-status-chip--info {
+  border-color: color-mix(in srgb, var(--tracer-color-info) 50%, var(--tracer-color-border));
+  color: var(--tracer-color-info);
+}
+.tracer-status-chip--success {
+  border-color: color-mix(in srgb, var(--tracer-color-success) 50%, var(--tracer-color-border));
+  color: var(--tracer-color-success);
+}
+.tracer-status-chip--warning {
+  border-color: color-mix(in srgb, var(--tracer-color-warning) 50%, var(--tracer-color-border));
+  color: var(--tracer-color-warning);
+}
+.tracer-status-chip--danger {
+  border-color: color-mix(in srgb, var(--tracer-color-danger) 50%, var(--tracer-color-border));
+  color: var(--tracer-color-danger);
+}
+
+/* —— RuntimePill —— */
+.tracer-runtime-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tracer-space-2);
+  padding: 2px 10px;
+  border-radius: var(--tracer-radius-sm);
+  background: var(--tracer-color-surface);
+  border: 1px solid var(--tracer-color-border);
+  font-size: var(--tracer-font-size-sm);
+  color: var(--tracer-color-text-muted);
+}
+
+.tracer-runtime-pill__label {
+  color: var(--tracer-color-text);
+  font-weight: 500;
+}
+
+/* —— Banner —— */
+.tracer-banner {
+  display: flex;
+  gap: var(--tracer-space-3);
+  align-items: flex-start;
+  padding: var(--tracer-space-3) var(--tracer-space-4);
+  border-radius: var(--tracer-radius-md);
+  border: 1px solid var(--tracer-color-border);
+  background: var(--tracer-color-surface-elevated);
+  box-shadow: var(--tracer-shadow-banner);
+}
+
+.tracer-banner--error {
+  border-color: color-mix(in srgb, var(--tracer-color-danger) 55%, var(--tracer-color-border));
+  background: color-mix(in srgb, var(--tracer-color-danger) 12%, var(--tracer-color-surface));
+}
+.tracer-banner--warning {
+  border-color: color-mix(in srgb, var(--tracer-color-warning) 55%, var(--tracer-color-border));
+  background: color-mix(in srgb, var(--tracer-color-warning) 10%, var(--tracer-color-surface));
+}
+.tracer-banner--info {
+  border-color: color-mix(in srgb, var(--tracer-color-info) 45%, var(--tracer-color-border));
+  background: color-mix(in srgb, var(--tracer-color-info) 10%, var(--tracer-color-surface));
+}
+.tracer-banner--success {
+  border-color: color-mix(in srgb, var(--tracer-color-success) 45%, var(--tracer-color-border));
+  background: color-mix(in srgb, var(--tracer-color-success) 10%, var(--tracer-color-surface));
+}
+
+.tracer-banner__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: var(--tracer-font-size-md);
+}
+.tracer-banner__body {
+  margin: var(--tracer-space-1) 0 0;
+  color: var(--tracer-color-text-muted);
+  font-size: var(--tracer-font-size-sm);
+}
+.tracer-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tracer-space-2);
+  margin-top: var(--tracer-space-3);
+}
+
+/* —— Button —— */
+.tracer-button {
+  appearance: none;
+  border: 1px solid var(--tracer-color-border);
+  background: var(--tracer-color-surface-elevated);
+  color: var(--tracer-color-text);
+  border-radius: var(--tracer-radius-sm);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: var(--tracer-font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tracer-button:hover:not(:disabled) {
+  border-color: var(--tracer-color-focus);
+}
+.tracer-button:focus-visible {
+  outline: 2px solid var(--tracer-color-focus);
+  outline-offset: 2px;
+}
+.tracer-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.tracer-button--primary {
+  background: color-mix(in srgb, var(--tracer-color-info) 28%, var(--tracer-color-surface));
+  border-color: color-mix(in srgb, var(--tracer-color-info) 55%, var(--tracer-color-border));
+}
+.tracer-button--danger {
+  background: color-mix(in srgb, var(--tracer-color-danger) 22%, var(--tracer-color-surface));
+  border-color: color-mix(in srgb, var(--tracer-color-danger) 55%, var(--tracer-color-border));
+}
+.tracer-button--ghost {
+  background: transparent;
+}
+
+/* —— Empty / Loading presentation —— */
+.tracer-empty-state,
+.tracer-loading-state,
+.tracer-presentation {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--tracer-space-2);
+  padding: var(--tracer-space-6);
+  border: 1px dashed var(--tracer-color-border);
+  border-radius: var(--tracer-radius-md);
+  background: var(--tracer-color-surface);
+  min-height: 120px;
+}
+
+.tracer-presentation__title {
+  margin: 0;
+  font-size: var(--tracer-font-size-lg);
+  font-weight: 600;
+}
+.tracer-presentation__body {
+  margin: 0;
+  color: var(--tracer-color-text-muted);
+  max-width: 48ch;
+}
+.tracer-presentation__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tracer-space-2);
+  margin-top: var(--tracer-space-2);
+}
+
+.tracer-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--tracer-color-border);
+  border-top-color: var(--tracer-color-info);
+  border-radius: 50%;
+  animation: tracer-spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tracer-spinner {
+    animation: none;
+    border-top-color: var(--tracer-color-info);
+    opacity: 0.85;
+  }
+}
+@keyframes tracer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tracer-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -136,7 +136,8 @@ npx --yes github:KJ-AIML/heli-harness session close --session heli-ses-08ed6631-
 | SHA | Message |
 |---|---|
 | `a28d634084be43359e20e354f8f66f3c8619dcc0` | `docs(w0-d): test strategy, acceptance criteria, failure matrix, specifications` |
-| `b1d322064cd941cf2001931419f29b18ea4d6a8e` | `docs(w0-d): completion report` |
+| `c71f19727017c3e441aed8b2cc90ac34a2edcfa5` | `docs(w0-d): completion report` |
+| *(tip after SHA table fix; see git log)* | `docs(w0-d): correct completion report commit SHA` |
 
 **Post-rebase base:** `5b936412b982cc4310f1196caef023a968ea070a` (integrated main / Gate 0.1 tip).
 

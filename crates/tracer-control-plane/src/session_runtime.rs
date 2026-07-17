@@ -13,7 +13,7 @@
 //! ```
 //!
 //! Bounded handoff applies backpressure when SQLite is slow so W1-F does not
-//! add a second unbounded buffer. Drain uses `send_timeout` so stop remains
+//! add a second unbounded buffer. Drain uses try_send+sleep so stop remains
 //! responsive if the bridge is full. Presentation is post-persist and must not
 //! block the adapter channel indefinitely.
 //!
@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{
     self, Receiver as StdReceiver, RecvTimeoutError, Sender as StdSender, SyncSender,
-    SendTimeoutError,
+    TrySendError,
 };
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -34,8 +34,8 @@ use std::time::Duration;
 /// Bounded internal handoff between OS drain and async persist pump.
 /// Keeps adapter drain continuous while preventing unbounded->unbounded growth.
 const BRIDGE_CAPACITY: usize = 256;
-/// Max wait for bridge space before re-checking stop flag.
-const BRIDGE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
+/// Sleep while bridge is full before retrying try_send.
+const BRIDGE_BACKPRESSURE_SLEEP: Duration = Duration::from_millis(10);
 
 use serde_json::Value;
 use tracer_domain::{AuthenticationState, SessionStatus};
@@ -165,7 +165,6 @@ impl LiveSession {
 
     pub fn stop_ingestor(&self) {
         self.stop_ingest.store(true, Ordering::SeqCst);
-        // Join drain first (exits via stop + try_send / send_timeout); then abort pump.
         if let Ok(mut g) = self.drain_join.lock() {
             if let Some(h) = g.take() {
                 let _ = h.join();
@@ -173,7 +172,6 @@ impl LiveSession {
         }
         if let Ok(mut g) = self.pump_abort.lock() {
             if let Some(h) = g.take() {
-                // Pump exits when bridge sender drops after drain join; abort is fallback.
                 h.abort();
             }
         }
@@ -210,7 +208,6 @@ fn drain_adapter(
     debug!(session = %session_id, "adapter drain started");
     loop {
         if stop.load(Ordering::SeqCst) {
-            // Best-effort flush without blocking forever on a full bridge.
             while let Ok(ev) = rx.try_recv() {
                 if tx.try_send(ev).is_err() {
                     break;
@@ -220,20 +217,20 @@ fn drain_adapter(
         }
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(ev) => {
-                // Apply backpressure with timeout; re-check stop when full.
                 let mut pending = Some(ev);
                 while let Some(item) = pending.take() {
-                    match tx.send_timeout(item, BRIDGE_SEND_TIMEOUT) {
+                    match tx.try_send(item) {
                         Ok(()) => {}
-                        Err(SendTimeoutError::Timeout(held)) => {
+                        Err(TrySendError::Full(held)) => {
                             if stop.load(Ordering::SeqCst) {
                                 let _ = tx.try_send(held);
                                 debug!(session = %session_id, "adapter drain stopped (stop while full)");
                                 return;
                             }
+                            thread::sleep(BRIDGE_BACKPRESSURE_SLEEP);
                             pending = Some(held);
                         }
-                        Err(SendTimeoutError::Disconnected(_)) => {
+                        Err(TrySendError::Disconnected(_)) => {
                             debug!(session = %session_id, "adapter drain stopped (bridge closed)");
                             return;
                         }
@@ -245,7 +242,6 @@ fn drain_adapter(
         }
     }
     debug!(session = %session_id, "adapter drain stopped");
-    // Dropping tx closes bridge for async pump.
 }
 
 async fn async_persist_pump(
@@ -280,8 +276,8 @@ async fn async_persist_pump(
                 // std mpsc doesn't expose is_disconnected without recv; use timeout recv.
                 match rx.recv_timeout(Duration::from_millis(5)) {
                     Ok(ev) => batch.push(ev),
-                    Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => {
+                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
                         while let Ok(ev) = rx.try_recv() {
                             batch.push(ev);
                         }
@@ -342,8 +338,6 @@ async fn persist_one(
                         );
                         st.auth_state = adapter.auth_state();
                     }
-                    // Presentation is post-persist; never blocks ingestion indefinitely
-                    // (unbounded fanout or disconnected receiver drops).
                     if let Ok(g) = fanout.lock() {
                         if let Some(tx) = g.as_ref() {
                             let _ = tx.send(PresentationEvent {

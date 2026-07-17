@@ -4291,6 +4291,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
+name = "tracer-acp-client"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracer-domain",
+]
+
+[[package]]
 name = "tracer-desktop"
 version = "0.1.0"
 dependencies = [
@@ -4333,6 +4344,22 @@ dependencies = [
  "thiserror 2.0.18",
  "uuid",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "tracer-runtime-adapter"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "time",
+ "tracer-acp-client",
+ "tracer-domain",
+ "tracer-process",
+ "uuid",
 ]
 
 [[package]]

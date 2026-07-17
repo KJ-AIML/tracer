@@ -1,0 +1,22 @@
+[package]
+name = "tracer-runtime-adapter"
+version = "0.1.0"
+edition.workspace = true
+description = "ACP runtime adapter: process composition, normalization to Tracer events (W1-D)"
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+uuid = { workspace = true }
+tracer-domain = { workspace = true }
+tracer-process = { workspace = true }
+tracer-acp-client = { path = "../tracer-acp-client" }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

@@ -1,0 +1,17 @@
+[package]
+name = "tracer-acp-client"
+version = "0.1.0"
+edition.workspace = true
+description = "ACP JSON-RPC NDJSON client: transport, codec, session protocol state machine (W1-D)"
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracer-domain = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

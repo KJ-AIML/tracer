@@ -5,6 +5,8 @@ members = [
   "crates/tracer-process",
   "crates/tracer-storage",
   "crates/tracer-heli",
+  "crates/tracer-acp-client",
+  "crates/tracer-runtime-adapter",
   "apps/desktop/src-tauri",
   "tests/integration/storage",
 ]
@@ -39,3 +41,5 @@ tracer-domain = { path = "crates/tracer-domain" }
 tracer-process = { path = "crates/tracer-process" }
 tracer-storage = { path = "crates/tracer-storage" }
 tracer-heli = { path = "crates/tracer-heli" }
+tracer-acp-client = { path = "crates/tracer-acp-client" }
+tracer-runtime-adapter = { path = "crates/tracer-runtime-adapter" }

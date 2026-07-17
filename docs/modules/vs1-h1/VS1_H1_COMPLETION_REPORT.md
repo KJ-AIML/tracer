@@ -121,4 +121,8 @@ cargo run -p live-grok-smoke -- run --allow-unauth
 
 ## 11. Commits
 
-Local commits only on `agent/tracer-vs1-live-smoke` — see git log for SHAs after commit.
+| SHA | Message |
+|---|---|
+| `8817098` | `feat(vs1-h1): add manual opt-in live Grok smoke harness` |
+
+Local commits only on `agent/tracer-vs1-live-smoke` — **not pushed**.

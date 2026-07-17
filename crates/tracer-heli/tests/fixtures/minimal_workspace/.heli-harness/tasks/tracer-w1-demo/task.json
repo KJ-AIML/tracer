@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "taskId": "tracer-w1-demo",
+  "title": "Demo task",
+  "status": "active",
+  "programId": null,
+  "parentTaskId": null,
+  "source": {
+    "planPath": null,
+    "workItemKey": "W1-H",
+    "fingerprint": "demo-fp-1"
+  },
+  "target": {
+    "repositoryId": "tracer",
+    "repositoryPath": "",
+    "worktreePath": "d:/fixture/old-meta-worktree",
+    "branch": "agent/tracer-w1-demo",
+    "baseSha": null,
+    "headSha": null
+  },
+  "mode": "strict",
+  "revision": 1,
+  "pathClaims": {
+    "owns": ["docs/agent-workflows/**", "docs/modules/w1-h/**"],
+    "reads": ["docs/integration/**"],
+    "shared": [],
+    "forbidden": [".heli-harness/**"]
+  },
+  "yolo": { "enabled": false },
+  "createdAt": "2026-07-17T00:00:00.000Z",
+  "updatedAt": "2026-07-17T00:00:00.000Z"
+}

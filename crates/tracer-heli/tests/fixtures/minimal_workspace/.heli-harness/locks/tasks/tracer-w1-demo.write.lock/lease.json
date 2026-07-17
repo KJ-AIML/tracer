@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "leaseId": "heli-lease-demo-1",
+  "taskId": "tracer-w1-demo",
+  "sessionId": "heli-ses-demo-writer",
+  "mode": "write",
+  "worktreePath": "d:/fixture/demo-worktree",
+  "acquiredAt": "2026-07-17T00:00:00.000Z",
+  "lastActivityAt": "2026-07-17T00:00:00.000Z",
+  "expiresAt": "2099-01-01T00:00:00.000Z",
+  "ttlSeconds": 14400,
+  "revision": 1
+}

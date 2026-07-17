@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "canonicalWorktreePath": "d:/fixture/demo-worktree",
+  "hostBindings": {
+    "grok-build": {
+      "sessionId": "heli-ses-demo-writer",
+      "mode": "write",
+      "updatedAt": "2026-07-17T00:00:00.000Z"
+    }
+  },
+  "taskId": "tracer-w1-demo",
+  "defaultSessionId": "heli-ses-demo-writer",
+  "updatedAt": "2026-07-17T00:00:00.000Z"
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "taskId": "tracer-w1-other",
+  "title": "Other task",
+  "status": "active",
+  "programId": null,
+  "parentTaskId": null,
+  "source": {
+    "planPath": null,
+    "workItemKey": "W1-B",
+    "fingerprint": "other-fp-1"
+  },
+  "target": {
+    "repositoryId": "tracer",
+    "repositoryPath": "",
+    "worktreePath": "d:/fixture/other-worktree",
+    "branch": null,
+    "baseSha": null,
+    "headSha": null
+  },
+  "mode": "strict",
+  "revision": 1,
+  "pathClaims": {
+    "owns": ["crates/tracer-domain/**"],
+    "reads": [],
+    "shared": [],
+    "forbidden": ["docs/agent-workflows/**"]
+  },
+  "yolo": { "enabled": false },
+  "createdAt": "2026-07-17T00:00:00.000Z",
+  "updatedAt": "2026-07-17T00:00:00.000Z"
+}

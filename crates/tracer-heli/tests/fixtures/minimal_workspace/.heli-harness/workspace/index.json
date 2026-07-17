@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "workspaceRoot": ".",
+  "repos": [
+    {
+      "name": "tracer",
+      "path": "repos/tracer",
+      "gitRoot": "repos/tracer",
+      "profile": "",
+      "defaultTarget": true,
+      "notes": "Primary Tracer product repository"
+    },
+    {
+      "name": "grok-build-upstream",
+      "path": "repos/grok-build",
+      "gitRoot": "repos/grok-build",
+      "profile": "",
+      "defaultTarget": false,
+      "notes": "Upstream read-only"
+    }
+  ]
+}

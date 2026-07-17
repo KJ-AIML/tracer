@@ -4,7 +4,7 @@
 **Work item:** VS1-H3 â€” Concurrency and Persistence Soak  
 **Branch:** `agent/tracer-vs1-soak`  
 **Base SHA:** `15c9399c28f79bdf9c125c26f52d7bf956fb4722`  
-**Head SHA:** 97e214e4a0c9fbaf64017dbfa36a0e3966f1e745  
+**Head SHA:** `d20a45b` (docs); suite `97e214e`; fix `b0ae28d`  
 **Session id:** `heli-ses-4b5f1483-c85a-4ca9-a2cc-a7d462d3839f`  
 **Host:** grok-build  
 **Target:** tracer  

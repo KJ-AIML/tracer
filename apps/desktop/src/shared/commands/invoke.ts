@@ -57,30 +57,61 @@ export function getInvokeMode(): InvokeMode {
 
 /**
  * invokeTracer — request/response only. High-frequency traffic uses tracer://events.
- * Mock mode rejects with Unsupported until W1-F wires control plane.
+ * Mock mode keeps shell usable offline; Tauri mode uses W1-F control plane commands.
  */
 export async function invokeTracer<TResult = unknown>(
   command: TracerCommandName,
   _args?: Record<string, unknown>,
 ): Promise<TResult> {
+  // Prefer live Tauri when available (desktop vertical slice).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tauri = (globalThis as any).__TAURI__;
+  if (mode === "tauri" || tauri?.core?.invoke) {
+    if (!tauri?.core?.invoke) {
+      throw new TracerInvokeError({
+        errorClass: "InternalError",
+        message: "Tauri invoke API not available in this environment.",
+        retryable: false,
+      });
+    }
+    try {
+      return (await tauri.core.invoke(command, _args)) as TResult;
+    } catch (e: unknown) {
+      // Control plane returns JSON CommandError strings.
+      if (typeof e === "string") {
+        try {
+          const parsed = JSON.parse(e) as {
+            errorClass?: string;
+            message?: string;
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+          };
+          throw new TracerInvokeError({
+            errorClass: parsed.errorClass ?? "InternalError",
+            message: parsed.message ?? e,
+            retryable: parsed.retryable ?? false,
+            details: parsed.details,
+          });
+        } catch (inner) {
+          if (inner instanceof TracerInvokeError) throw inner;
+        }
+      }
+      throw e;
+    }
+  }
+
   if (mode === "mock") {
     throw new TracerInvokeError({
       errorClass: "Unsupported",
-      message: `Mock shell: ${command} is not wired. Use mock store; W1-F owns real control plane.`,
+      message: `Mock shell: ${command} not available without Tauri. Use mock store or run desktop app.`,
       retryable: false,
       details: { command, mode },
     });
   }
 
-  // Tauri path reserved for W1-F composition.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tauri = (globalThis as any).__TAURI__;
-  if (!tauri?.core?.invoke) {
-    throw new TracerInvokeError({
-      errorClass: "InternalError",
-      message: "Tauri invoke API not available in this environment.",
-      retryable: false,
-    });
-  }
-  return tauri.core.invoke(command, _args) as Promise<TResult>;
+  throw new TracerInvokeError({
+    errorClass: "InternalError",
+    message: "No invoke backend available.",
+    retryable: false,
+  });
 }

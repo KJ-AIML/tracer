@@ -1,29 +1,68 @@
-//! Tracer desktop Tauri bootstrap (W1-A).
+//! Tracer desktop Tauri bootstrap with W1-F control plane commands.
 //!
-//! **Scope:** window shell only — enough for `tauri dev` / frontend hosting.
-//! **Handoff to W1-F:** register `tracer_*` commands, event stream `tracer://events`,
-//! compose process/adapter/storage crates. Do **not** put ACP/runtime/storage
-//! business logic in this file during W1-A.
-//!
-//! **Migrations:** `src-tauri/migrations/` is owned by W1-E — do not add here.
+//! Commands are thin glue over `tracer-control-plane`. No raw ACP, no direct
+//! SQLite from handlers, no process management outside the control plane.
+
+mod commands;
+mod control_plane;
+
+use std::sync::Arc;
+
+use commands::PlaneState;
+use control_plane::build_control_plane;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Tokio runtime for async control plane open before tauri loop.
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let plane = rt.block_on(build_control_plane(None)).unwrap_or_else(|e| {
+        eprintln!("control plane open failed (shell will still start): {e}");
+        // Fallback: try in-memory again so commands can report StorageError paths.
+        rt.block_on(async {
+            build_control_plane(None)
+                .await
+                .expect("in-memory control plane")
+        })
+    });
+
+    // Keep runtime alive for control plane background storage.
+    std::mem::forget(rt);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![app_shell_info])
+        .manage(PlaneState {
+            plane: Arc::clone(&plane),
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::tracer_app_info,
+            commands::tracer_presentation_snapshot,
+            commands::tracer_heli_status,
+            commands::tracer_project_list,
+            commands::tracer_project_register,
+            commands::tracer_project_get,
+            commands::tracer_session_list,
+            commands::tracer_session_create,
+            commands::tracer_session_get,
+            commands::tracer_session_submit_prompt,
+            commands::tracer_session_cancel,
+            commands::tracer_session_stop,
+            commands::tracer_events_list,
+            commands::tracer_approval_list_pending,
+            commands::tracer_approval_resolve,
+            commands::tracer_runtime_status,
+            app_shell_info,
+        ])
         .run(tauri::generate_context!())
-        .expect("error while running Tracer desktop shell");
+        .expect("error while running Tracer desktop");
 }
 
-/// Temporary stub command so the shell binary exposes something invoke-able.
-/// REPLACE_WHEN_W1F_CONTROL_PLANE_AVAILABLE — use `tracer_app_info` contract name.
+/// Legacy shell stub (kept for W1-A smoke compatibility).
 #[tauri::command]
 fn app_shell_info() -> serde_json::Value {
     serde_json::json!({
         "name": "tracer-desktop",
-        "module": "W1-A",
-        "mode": "shell-stub",
-        "note": "Control plane commands land in W1-F (tracer_app_info, tracer_session_*, tracer://events)"
+        "module": "W1-F",
+        "mode": "control-plane",
+        "note": "tracer_* commands registered via tracer-control-plane"
     })
 }

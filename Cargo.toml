@@ -12,6 +12,8 @@ members = [
   "tests/integration/storage",
   "tests/soak",
   "tests/stress",
+  # VS1-H1: manual opt-in live Grok smoke (never required by standard CI live jobs)
+  "tools/live-grok-smoke",
 ]
 
 [workspace.package]

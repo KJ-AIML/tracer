@@ -19,8 +19,9 @@
     "baseUrl": ".",
     "paths": {
       "@tracer/ui": ["../../packages/ui/src/index.ts"],
+      "@tracer/event-types": ["../../packages/event-types/src/index.ts"],
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "../../packages/ui/src"]
+  "include": ["src", "../../packages/ui/src", "../../packages/event-types/src"]
 }

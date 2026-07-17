@@ -822,7 +822,6 @@ async fn storage_temp_sqlite_open() {
     let _ = SqliteStorage::new(pool);
 }
 
-
 // ---------------------------------------------------------------------------
 // File-backed SQLite critical scenarios (Gate 1.3 Part 8)
 // Unique temp DB file; reopen for recovery; migrations; ordering; cleanup.
@@ -870,7 +869,11 @@ async fn vs01_file_backed_successful_run() {
     let snap = cp.snapshot();
     assert_eq!(snap.version, 1);
     let _ = cp.session_stop(&session.session_id, false).await;
-    assert!(db.is_file(), "temp sqlite file remains until cleanup: {}", db.display());
+    assert!(
+        db.is_file(),
+        "temp sqlite file remains until cleanup: {}",
+        db.display()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -913,7 +916,10 @@ async fn vs05_file_backed_cancel_before_approval_no_deadlock() {
     assert!(cancel.accepted);
     let _ = tokio::time::timeout(Duration::from_secs(15), prompt).await;
     let pending = cp.approval_list_pending(&sid).unwrap_or_default();
-    assert!(pending.is_empty(), "no stale approvals file-backed: {pending:?}");
+    assert!(
+        pending.is_empty(),
+        "no stale approvals file-backed: {pending:?}"
+    );
     let _ = cp.session_stop(&sid, true).await;
     assert!(db.is_file());
 }

@@ -29,7 +29,9 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::sync::mpsc::{channel as tokio_channel, Receiver as TokioReceiver, Sender as TokioSender};
+use tokio::sync::mpsc::{
+    channel as tokio_channel, Receiver as TokioReceiver, Sender as TokioSender,
+};
 use tracer_domain::{AuthenticationState, SessionStatus};
 use tracer_runtime_adapter::{
     AdapterEvent, ApprovalDecisionRequest, PromptRequest, RuntimeAdapter, ShutdownOptions,

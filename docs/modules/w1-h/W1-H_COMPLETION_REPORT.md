@@ -5,6 +5,7 @@
 **Work item:** W1-H  
 **Branch:** `agent/tracer-w1-heli-integration`  
 **Base SHA:** `e104d8d21a3370193decd9472036e037741ad3e7`  
+**Head SHA:** `1c524f6e2e0e9282988220cfe4993f95026cff35`  
 **Host:** `grok-build`  
 **Session id:** `heli-ses-59c05b42-5557-4f0f-8935-c5f309876b8d`  
 **Lease id (claim):** `heli-lease-08431aca-c3d9-4057-b73d-aca6e973fa08`  

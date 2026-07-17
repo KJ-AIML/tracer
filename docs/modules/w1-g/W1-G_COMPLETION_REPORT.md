@@ -9,6 +9,7 @@
 **Heli session:** `heli-ses-dd04adc8-0cf4-4001-9a85-f0b2c8acaa07`  
 **Lease:** `heli-lease-384b8d1f-fa6f-4dbe-a360-e1cb35f5cd38`  
 **Base SHA:** `e104d8d21a3370193decd9472036e037741ad3e7`  
+**Deliverable SHA:** `18e2d6019c37f3676885663018ce6fa6591e5bb6`  
 **Date:** 2026-07-17  
 **Host:** grok-build
 
@@ -82,6 +83,10 @@ node --test tests/contract/fake-runtime/*.test.js
 4. Root Cargo/pnpm workspace manifests not created (request-only); packages are self-contained Node modules runnable via `node --test`.
 
 ## Git
+
+| SHA | Message |
+|---|---|
+| `18e2d6019c37f3676885663018ce6fa6591e5bb6` | `feat(w1-g): deterministic fake ACP runtime and contract harness` |
 
 Local commits only; **no push**.
 

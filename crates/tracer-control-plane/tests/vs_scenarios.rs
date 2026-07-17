@@ -121,10 +121,23 @@ async fn vs01_successful_run() {
         .expect("prompt");
     assert!(prompt.accepted);
 
-    let events = cp
+    // Poll for stream/complete under parallel workspace load (drain lag).
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut events = cp
         .events_list(&session.session_id, 0, 500)
         .await
         .expect("events");
+    while Instant::now() < deadline
+        && !(has_type(&events.events, "session.completed")
+            || has_type(&events.events, "agent.message.delta")
+            || has_type(&events.events, "agent.message.completed"))
+    {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        events = cp
+            .events_list(&session.session_id, 0, 500)
+            .await
+            .expect("events poll");
+    }
     assert!(
         sequences_monotonic(&events.events),
         "storage sequences monotonic"

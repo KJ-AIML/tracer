@@ -1,13 +1,18 @@
 import type { Dispatch, ReactElement } from "react";
-import { Button, EmptyState, PresentationContainer } from "@tracer/ui";
-import { MOCK_IDS, type MockAction, type MockState } from "../../shared/store/mockStore";
+import { Button, EmptyState, LoadingState, PresentationContainer } from "@tracer/ui";
+import type { AppAction, AppViewState, SnapshotJourney } from "../../shared/store/snapshotStore";
 
 interface Props {
-  state: MockState;
-  dispatch: Dispatch<MockAction>;
+  state: AppViewState;
+  dispatch: Dispatch<AppAction>;
+  journey: SnapshotJourney;
 }
 
-export function ProjectsHome({ state, dispatch }: Props): ReactElement {
+export function ProjectsHome({ state, dispatch, journey }: Props): ReactElement {
+  if (state.loadPhase === "loading") {
+    return <LoadingState label="Loading projects…" />;
+  }
+
   if (state.projects.length === 0) {
     return (
       <div className="layout-stack">
@@ -17,9 +22,11 @@ export function ProjectsHome({ state, dispatch }: Props): ReactElement {
           action={
             <Button
               variant="primary"
-              onClick={() => dispatch({ type: "restoreProjects" })}
+              onClick={() => {
+                void journey.loadProjects();
+              }}
             >
-              Open a local repository (mock)
+              Refresh projects
             </Button>
           }
         />
@@ -36,11 +43,18 @@ export function ProjectsHome({ state, dispatch }: Props): ReactElement {
         <div className="layout-row">
           <Button
             variant="ghost"
-            onClick={() => dispatch({ type: "clearProjects" })}
+            onClick={() => {
+              void journey.refreshSnapshot();
+              void journey.loadProjects();
+            }}
           >
-            Simulate empty
+            Refresh snapshot
           </Button>
-          <Button variant="primary" disabled disabledReason="W1-F wires tracer_project_register">
+          <Button
+            variant="primary"
+            disabled
+            disabledReason="Native folder picker wires with host dialogs; register via tracer_project_register"
+          >
             Register project
           </Button>
         </div>
@@ -52,19 +66,24 @@ export function ProjectsHome({ state, dispatch }: Props): ReactElement {
             <div>
               <div>{p.name}</div>
               <div className="list__meta">
-                {p.status === "ready" ? "Ready" : p.status === "missing" ? "Folder missing" : "Invalid project"}
+                {p.status === "ready"
+                  ? "Ready"
+                  : p.status === "missing"
+                    ? "Folder missing"
+                    : "Invalid project"}
                 {" · "}
                 <span>{p.rootPath}</span>
               </div>
             </div>
             <Button
               variant="primary"
-              onClick={() =>
+              onClick={() => {
                 dispatch({
                   type: "navigate",
                   route: { name: "project", projectId: p.projectId },
-                })
-              }
+                });
+                void journey.loadSessions(p.projectId);
+              }}
             >
               Open
             </Button>
@@ -74,13 +93,9 @@ export function ProjectsHome({ state, dispatch }: Props): ReactElement {
 
       <PresentationContainer
         kind="empty"
-        title="Register more repositories later"
-        body="Path dialogs and tracer_project_* commands land with W1-F control plane."
+        title="Typed snapshot source of truth"
+        body="Projects come from tracer_project_list. Presentation state refreshes via tracer_presentation_snapshot."
       />
-
-      <p className="list__meta">
-        Demo project id: <code>{MOCK_IDS.projectId}</code>
-      </p>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 /**
- * Session workspace SHELL placeholder (W1-A).
- * Feature bodies for timeline/approvals/changes/terminal belong to later modules.
- * Layout regions follow SESSION_SCREEN_SPEC; data is mock-store only.
+ * Session workspace — VS1-H2 snapshot/command driven.
+ * Feature bodies for full editor/terminal/file explorer are out of scope.
+ * Layout regions follow SESSION_SCREEN_SPEC; data from typed snapshots only.
  */
 import type { Dispatch, ReactElement } from "react";
 import {
@@ -13,18 +13,23 @@ import {
   type SessionStatus,
 } from "@tracer/ui";
 import {
+  applyMockScenario,
   composerDisabledReason,
+  isCancelEnabled,
   isCancelVisible,
   isComposerEnabled,
-  type MockAction,
-  type MockState,
-} from "../../shared/store/mockStore";
+  type AppAction,
+  type AppViewState,
+  type SnapshotJourney,
+} from "../../shared/store/snapshotStore";
+import type { MockScenario } from "../../shared/commands/mockBackend";
 
 interface Props {
-  state: MockState;
+  state: AppViewState;
   projectId: string;
   sessionId: string;
-  dispatch: Dispatch<MockAction>;
+  dispatch: Dispatch<AppAction>;
+  journey: SnapshotJourney;
 }
 
 function presentationForStatus(status: SessionStatus): ReactElement | null {
@@ -48,7 +53,7 @@ function presentationForStatus(status: SessionStatus): ReactElement | null {
     case "running":
       return <PresentationContainer kind="running" sessionStatus={status} />;
     case "awaiting_approval":
-      return null; // dedicated interrupt below
+      return null;
     case "failed":
       return <PresentationContainer kind="failed" sessionStatus={status} />;
     case "disconnected":
@@ -68,21 +73,35 @@ export function SessionWorkspacePlaceholder({
   projectId,
   sessionId,
   dispatch,
+  journey,
 }: Props): ReactElement {
-  const status = state.activeSessionStatus;
+  const status = state.sessionStatus;
   const runtime = state.runtimeObservation;
-  const composerOn = isComposerEnabled(status, runtime);
-  const disabledReason = composerDisabledReason(status, runtime);
+  const auth = state.authState;
+  const composerOn = isComposerEnabled(status, runtime, auth) && !state.commandBusy;
+  const disabledReason =
+    state.commandBusy
+      ? "Working…"
+      : composerDisabledReason(status, runtime, auth);
   const cancelVisible = isCancelVisible(status);
+  const cancelEnabled = isCancelEnabled(status) && !state.commandBusy;
+  const pending = state.pendingApprovals[0];
 
   const leave = (): void => {
     if (status === "running" || status === "awaiting_approval") {
       const ok = window.confirm(
-        "Session is still active (running or awaiting approval). Leave anyway? (Mock shell does not stop the runtime.)",
+        "Session is still active (running or awaiting approval). Leave anyway? (Runtime lifecycle stays with control plane.)",
       );
       if (!ok) return;
     }
     dispatch({ type: "navigate", route: { name: "project", projectId } });
+  };
+
+  const runScenario = async (scenario: MockScenario): Promise<void> => {
+    if (!state.demoRuntime) return;
+    applyMockScenario(scenario);
+    await journey.refreshSnapshot();
+    await journey.loadEvents(sessionId);
   };
 
   return (
@@ -92,34 +111,55 @@ export function SessionWorkspacePlaceholder({
           <Button variant="ghost" onClick={leave}>
             ← Sessions
           </Button>
-          <strong>Demo session</strong>
-          <StatusChip status={status} sublabel={state.lastError ?? undefined} />
+          <strong>Session</strong>
+          <StatusChip status={status} sublabel={state.lastErrorMessage ?? undefined} />
           <RuntimePill observation={runtime} />
         </div>
         <div className="layout-row">
           {cancelVisible ? (
             <Button
               variant="default"
-              onClick={() => dispatch({ type: "setSessionStatus", status: "cancelling" })}
+              disabled={!cancelEnabled}
+              disabledReason={!cancelEnabled ? "Cancel unavailable" : undefined}
+              onClick={() => {
+                void journey.cancelSession(sessionId);
+              }}
             >
               Cancel
             </Button>
           ) : null}
           <Button
             variant="danger"
-            disabled={status === "stopped"}
-            disabledReason={status === "stopped" ? "Already stopped" : undefined}
-            onClick={() => dispatch({ type: "simulateCancel" })}
+            disabled={status === "stopped" || state.commandBusy}
+            disabledReason={
+              status === "stopped" ? "Already stopped" : state.commandBusy ? "Working…" : undefined
+            }
+            onClick={() => {
+              void journey.stopSession(sessionId);
+            }}
           >
             Stop
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              void journey.refreshSnapshot().then(() => journey.loadEvents(sessionId));
+            }}
+          >
+            Refresh snapshot
           </Button>
         </div>
       </header>
 
       <div className="layout-stack" aria-label="Session banners">
-        {runtime === "sign_in_required" ? (
+        {auth === "unauthenticated" || runtime === "sign_in_required" ? (
           <Banner severity="warning" title="Sign in required to use this agent runtime" live="assertive">
             <p>Choose an authentication method, then continue. Composer stays disabled until ready.</p>
+          </Banner>
+        ) : null}
+        {auth === "failed" ? (
+          <Banner severity="error" title="Sign-in failed" live="assertive">
+            <p>{state.lastErrorMessage ?? "Authentication failed."}</p>
           </Banner>
         ) : null}
         {status === "disconnected" ? (
@@ -130,9 +170,14 @@ export function SessionWorkspacePlaceholder({
             </p>
           </Banner>
         ) : null}
-        {state.lastError && status === "failed" ? (
+        {state.lastErrorMessage && status === "failed" ? (
           <Banner severity="error" title="Session failed" live="assertive">
-            <p>{state.lastError}</p>
+            <p>{state.lastErrorMessage}</p>
+          </Banner>
+        ) : null}
+        {!state.heli.available ? (
+          <Banner severity="info" title="Heli unavailable" live="polite">
+            <p>{state.heli.summary} — non-fatal; session continues.</p>
           </Banner>
         ) : null}
       </div>
@@ -144,11 +189,11 @@ export function SessionWorkspacePlaceholder({
             <PresentationContainer
               kind="empty"
               title="Session ready"
-              body="Send a prompt to begin. (Mock store — no real agent.)"
+              body="Send a prompt to begin. Events arrive as typed normalized envelopes."
             />
           ) : null}
           {presentationForStatus(status)}
-          {status === "awaiting_approval" ? (
+          {status === "awaiting_approval" && pending ? (
             <PresentationContainer
               kind="approval"
               sessionStatus={status}
@@ -156,24 +201,39 @@ export function SessionWorkspacePlaceholder({
                 <>
                   <Button
                     variant="primary"
-                    onClick={() => dispatch({ type: "setSessionStatus", status: "running" })}
+                    disabled={state.commandBusy}
+                    onClick={() => {
+                      void journey.resolveApproval(sessionId, pending.approvalId, "allow");
+                    }}
                   >
-                    Allow (mock)
+                    Allow
                   </Button>
                   <Button
                     variant="danger"
-                    onClick={() => dispatch({ type: "setSessionStatus", status: "running" })}
+                    disabled={state.commandBusy}
+                    onClick={() => {
+                      void journey.resolveApproval(sessionId, pending.approvalId, "deny");
+                    }}
                   >
-                    Deny (mock)
+                    Deny
                   </Button>
-                  <Button variant="ghost" onClick={() => dispatch({ type: "simulateCancel" })}>
+                  <Button
+                    variant="ghost"
+                    disabled={state.commandBusy}
+                    onClick={() => {
+                      void journey.resolveApproval(sessionId, pending.approvalId, "cancel");
+                    }}
+                  >
                     Cancel request
                   </Button>
                 </>
               }
             >
               <p className="list__meta">
-                Risk: Unknown — review carefully. Fail closed: never auto-allow.
+                <strong>{pending.action}</strong> — {pending.description}
+              </p>
+              <p className="list__meta">
+                Risk: {pending.risk} — review carefully. Fail closed: never auto-allow.
               </p>
             </PresentationContainer>
           ) : null}
@@ -184,6 +244,9 @@ export function SessionWorkspacePlaceholder({
                   <div>
                     <div>
                       <code>{e.type}</code>
+                      {typeof e.payload?.text === "string" ? (
+                        <span className="list__meta"> — {String(e.payload.text)}</span>
+                      ) : null}
                     </div>
                     <div className="list__meta">
                       seq {e.sequence} · {e.timestamp}
@@ -217,20 +280,33 @@ export function SessionWorkspacePlaceholder({
           </div>
           <div role="tabpanel" className="list__meta">
             {state.sideTab === "plan" && (
-              <p>No plan yet. Plans appear when the agent shares one. (Feature body: later module.)</p>
+              <p>No plan yet. Plans appear when the agent shares one.</p>
             )}
             {state.sideTab === "approvals" && (
-              <p>
-                Pending approvals appear here. Resolve via tracer_approval_resolve (W1-F). Fail closed.
-              </p>
+              <div>
+                {state.pendingApprovals.length === 0 ? (
+                  <p>No pending approvals. Fail closed: never auto-allow.</p>
+                ) : (
+                  <ul className="list">
+                    {state.pendingApprovals.map((a) => (
+                      <li key={a.approvalId} className="list__item">
+                        <div>
+                          <div>{a.action}</div>
+                          <div className="list__meta">{a.description}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
             {state.sideTab === "changes" && (
               <p>No file changes reported yet. Not a full VCS client.</p>
             )}
             {state.sideTab === "runtime" && (
               <p>
-                Runtime diagnostics placeholder. Process lifecycle owned by W1-C/W1-F. Observation:{" "}
-                <RuntimePill observation={runtime} />
+                Runtime diagnostics from snapshot. Process lifecycle owned by control plane.
+                Observation: <RuntimePill observation={runtime} />
               </p>
             )}
           </div>
@@ -251,9 +327,11 @@ export function SessionWorkspacePlaceholder({
         <div className="layout-row">
           <Button
             variant="primary"
-            disabled={!composerOn}
+            disabled={!composerOn || !state.composerText.trim()}
             disabledReason={disabledReason ?? undefined}
-            onClick={() => dispatch({ type: "simulatePromptSubmit" })}
+            onClick={() => {
+              void journey.submitPrompt(sessionId, state.composerText);
+            }}
           >
             Send
           </Button>
@@ -262,66 +340,37 @@ export function SessionWorkspacePlaceholder({
       </div>
 
       <footer className="session-footer">
-        <span>mock · session {sessionId.slice(0, 8)}…</span>
-        <span>seq {state.events.length}</span>
-        <span>last error: {state.lastError ?? "—"}</span>
+        <span>
+          {state.demoRuntime ? "mock" : "tauri"} · session {sessionId.slice(0, 8)}…
+        </span>
+        <span>seq {state.snapshot.latestSequence}</span>
+        <span>auth: {state.authState}</span>
+        <span>last error: {state.lastErrorMessage ?? "—"}</span>
       </footer>
 
-      <section className="panel" aria-label="Mock session controls">
-        <h2 className="panel__title">Mock controls (W1-A smoke)</h2>
-        <div className="mock-controls">
-          <label>
-            Status{" "}
-            <select
-              value={status}
-              onChange={(e) =>
-                dispatch({
-                  type: "setSessionStatus",
-                  status: e.target.value as SessionStatus,
-                })
-              }
-            >
-              {(
-                [
-                  "creating",
-                  "starting_runtime",
-                  "ready",
-                  "running",
-                  "awaiting_approval",
-                  "cancelling",
-                  "completed",
-                  "failed",
-                  "disconnected",
-                  "stopped",
-                ] as SessionStatus[]
-              ).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button onClick={() => dispatch({ type: "simulateApproval" })}>Approval</Button>
-          <Button onClick={() => dispatch({ type: "simulateDisconnect" })}>Disconnect</Button>
-          <Button onClick={() => dispatch({ type: "simulateComplete" })}>Complete</Button>
-          <Button onClick={() => dispatch({ type: "simulateCancel" })}>Cancel/Stop</Button>
-          <Button
-            onClick={() =>
-              dispatch({ type: "simulateFail", message: "Mock failure: capability mismatch" })
-            }
-          >
-            Fail
-          </Button>
-          <Button
-            onClick={() =>
-              dispatch({ type: "setRuntimeObservation", observation: "sign_in_required" })
-            }
-          >
-            Auth gate
-          </Button>
-          <Button onClick={() => dispatch({ type: "resetDemo" })}>Reset demo</Button>
-        </div>
-      </section>
+      {state.demoRuntime ? (
+        <section className="panel" aria-label="Mock scenario controls">
+          <h2 className="panel__title">Mock scenarios (browser / tests only)</h2>
+          <div className="mock-controls">
+            {(
+              [
+                ["default", "Ready"],
+                ["runtime_unavailable", "Runtime unavailable"],
+                ["authentication_required", "Auth required"],
+                ["approval_request", "Approval"],
+                ["completed_run", "Completed"],
+                ["runtime_crash", "Crash"],
+                ["session_history_restore", "History restore"],
+                ["heli_unavailable", "Heli unavailable"],
+              ] as const
+            ).map(([scenario, label]) => (
+              <Button key={scenario} onClick={() => void runScenario(scenario)}>
+                {label}
+              </Button>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -1,22 +1,32 @@
-import type { Dispatch, ReactElement } from "react";
+import { useEffect, type Dispatch, type ReactElement } from "react";
 import { Button, EmptyState, StatusChip } from "@tracer/ui";
-import { MOCK_IDS, type MockAction, type MockState } from "../../shared/store/mockStore";
+import type { AppAction, AppViewState, SnapshotJourney } from "../../shared/store/snapshotStore";
 
 interface Props {
-  state: MockState;
+  state: AppViewState;
   projectId: string;
-  dispatch: Dispatch<MockAction>;
+  dispatch: Dispatch<AppAction>;
+  journey: SnapshotJourney;
 }
 
-export function ProjectWorkspace({ state, projectId, dispatch }: Props): ReactElement {
+export function ProjectWorkspace({
+  state,
+  projectId,
+  dispatch,
+  journey,
+}: Props): ReactElement {
   const project = state.projects.find((p) => p.projectId === projectId);
   const sessions = state.sessionsByProject[projectId] ?? [];
+
+  useEffect(() => {
+    void journey.loadSessions(projectId);
+  }, [journey, projectId]);
 
   if (!project) {
     return (
       <EmptyState
         title="Project not found"
-        body="This project is not in the mock store."
+        body="This project is not in the current snapshot/project list."
         action={
           <Button onClick={() => dispatch({ type: "navigate", route: { name: "projects" } })}>
             Back to projects
@@ -60,18 +70,13 @@ export function ProjectWorkspace({ state, projectId, dispatch }: Props): ReactEl
           </h2>
           <Button
             variant="primary"
-            onClick={() =>
-              dispatch({
-                type: "navigate",
-                route: {
-                  name: "session",
-                  projectId: MOCK_IDS.projectId,
-                  sessionId: MOCK_IDS.sessionId,
-                },
-              })
-            }
+            disabled={state.commandBusy}
+            disabledReason={state.commandBusy ? "Working…" : undefined}
+            onClick={() => {
+              void journey.createSession(projectId, "New session");
+            }}
           >
-            Create session (mock)
+            Create session
           </Button>
         </div>
 
@@ -92,16 +97,9 @@ export function ProjectWorkspace({ state, projectId, dispatch }: Props): ReactEl
                 </div>
                 <Button
                   variant="primary"
-                  onClick={() =>
-                    dispatch({
-                      type: "navigate",
-                      route: {
-                        name: "session",
-                        projectId: s.projectId,
-                        sessionId: s.sessionId,
-                      },
-                    })
-                  }
+                  onClick={() => {
+                    void journey.openSession(s.projectId, s.sessionId);
+                  }}
                 >
                   Open
                 </Button>

@@ -389,7 +389,8 @@ impl ControlPlane {
                 rec.status = SessionStatus::Ready;
                 rec.runtime_session_id = Some(runtime_sid);
                 rec.capabilities = Some(caps_json);
-                self.storage.update_session(&rec).await?;
+                // Ingest pump may already have advanced next_sequence.
+                self.update_session_preserving_sequence(rec).await?;
 
                 {
                     self.sessions
@@ -422,7 +423,7 @@ impl ControlPlane {
                 rec.status = status;
                 rec.last_error = Some(error_payload(e.error_class.as_str(), &e.message));
                 rec.capabilities = Some(caps_json);
-                self.storage.update_session(&rec).await?;
+                self.update_session_preserving_sequence(rec).await?;
 
                 // Keep live session for inspect/auth paths when process still useful.
                 {
@@ -920,6 +921,20 @@ impl ControlPlane {
         Ok(())
     }
 
+    /// Ingest-path metrics for a live session (soak / diagnostics).
+    ///
+    /// Returns `None` when the session is not live (history-only / stopped).
+    pub fn session_ingest_metrics(
+        &self,
+        session_id: &str,
+    ) -> Option<crate::session_runtime::IngestMetricsSnapshot> {
+        self.sessions
+            .lock()
+            .expect("sessions")
+            .get(session_id)
+            .map(|live| live.metrics.snapshot())
+    }
+
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
@@ -936,6 +951,43 @@ impl ControlPlane {
                     format!("no live session {session_id}"),
                 )
             })
+    }
+
+    /// Persist a session row without decreasing `next_sequence`.
+    ///
+    /// The ingest pump advances `next_sequence` concurrently. A full-row
+    /// `update_session` from a stale `get_session` snapshot must never rewind
+    /// the sequence counter (that causes UNIQUE (session_id, sequence) failures
+    /// and silent event loss under burst — VS1-H3 soak finding).
+    async fn update_session_preserving_sequence(
+        &self,
+        mut rec: SessionRecord,
+    ) -> ControlPlaneResult<()> {
+        let sid = rec.session_id;
+        for _ in 0..8 {
+            let current = self.storage.get_session(&sid).await?;
+            let events = self.storage.list_events(&sid, 0, 1).await?;
+            // next must stay strictly ahead of the highest committed event.
+            let min_next = (events.latest_sequence + 1)
+                .max(current.next_sequence)
+                .max(rec.next_sequence)
+                .max(1);
+            rec.next_sequence = min_next;
+            rec.updated_at = now_rfc3339();
+            self.storage.update_session(&rec).await?;
+
+            let after = self.storage.get_session(&sid).await?;
+            let events_after = self.storage.list_events(&sid, 0, 1).await?;
+            if after.next_sequence > events_after.latest_sequence {
+                return Ok(());
+            }
+            // Pump advanced during write; repair and retry.
+            rec = after;
+            rec.next_sequence = events_after.latest_sequence + 1;
+        }
+        Err(ControlPlaneError::internal(
+            "failed to update session without clobbering next_sequence",
+        ))
     }
 
     async fn session_detail_from_live(

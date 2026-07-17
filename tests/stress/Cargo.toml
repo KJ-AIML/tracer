@@ -1,0 +1,18 @@
+[package]
+name = "tracer-vs1-stress"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "VS1-H3 bounded stress suite (time-capped; no infinite soaks)"
+license.workspace = true
+
+[[test]]
+name = "stress_repeated_sessions"
+path = "src/stress_repeated_sessions.rs"
+
+[dependencies]
+tracer-control-plane = { workspace = true }
+tracer-domain = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }

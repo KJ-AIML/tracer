@@ -149,7 +149,11 @@ proc.stop_default()?; // graceful stdin close then force tree kill
 
 ## 10. Commits
 
-(Recorded after local commit; see git log on branch.)
+| SHA | Message |
+|---|---|
+| `028fdd9690da3bc6d698a7f306d3f5d5c078729f` | `feat(w1-c): runtime process manager with Job Object orphan prevention` |
+
+Branch tip: `028fdd9` on `agent/tracer-w1-process-manager` (based on Gate 0 `e104d8d`).
 
 ## 11. Push policy
 

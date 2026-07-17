@@ -48,11 +48,11 @@
 
 | SHA | Message |
 |---|---|
-| `05f2951…` (see git log) | `merge(w0-a): architecture contracts into integration/tracer-w0-ab` |
-| `da9ccac…` (see git log) | `merge(w0-b): grok runtime recon into integration/tracer-w0-ab` |
-| *(this report / reconciliation commit)* | `docs(w0-i): stage 0.1 integration report and reconciliation notes` |
+| `05f29518a522e3707700b30b8ebecfb116fe2dce` | `merge(w0-a): architecture contracts into integration/tracer-w0-ab` |
+| `da9ccacc81af605a2373028ea5d27b8eac6afa85` | `merge(w0-b): grok runtime recon into integration/tracer-w0-ab` |
+| `c0b37a0ad04ccb6c7b5438d12cb4e43b2ecd7be9` | `docs(w0-i): stage 0.1 integration report and reconciliation notes` |
 
-Final integration branch tip and final `main` SHA are recorded in §12 after merge-to-main.
+Final SHAs after merge-to-main are in §12. A follow-up commit may refresh §12 only.
 
 ## 3. Documents inspected
 
@@ -256,8 +256,10 @@ No new ADR. Existing:
 
 | Ref | SHA |
 |---|---|
-| Integration branch tip after report commit | *(set after commit)* |
-| Final `main` after ff-only merge | *(set after merge)* |
+| W0-A merge | `05f29518a522e3707700b30b8ebecfb116fe2dce` |
+| W0-B merge | `da9ccacc81af605a2373028ea5d27b8eac6afa85` |
+| Integration report + reconciliation (initial) | `c0b37a0ad04ccb6c7b5438d12cb4e43b2ecd7be9` |
+| Final `main` (includes SHA table refresh) | recorded in commit message / completion report as HEAD at release |
 | Gate 0.1 | **PASS** |
 
 ## 13. What was not done

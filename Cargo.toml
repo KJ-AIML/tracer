@@ -10,6 +10,8 @@ members = [
   "crates/tracer-control-plane",
   "apps/desktop/src-tauri",
   "tests/integration/storage",
+  # VS1-H1: manual opt-in live Grok smoke (never required by standard CI live jobs)
+  "tools/live-grok-smoke",
 ]
 
 [workspace.package]

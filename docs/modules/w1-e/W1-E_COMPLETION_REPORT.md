@@ -88,7 +88,11 @@ cargo test
 
 ## Commits
 
-Recorded after this report is committed (see git log on `agent/tracer-w1-storage`).
+| SHA | Message |
+|---|---|
+| `df95fe849f1849971866a92a678ebde2f859d118` | `feat(w1-e): SQLite storage foundation for session and event persistence` |
+
+Branch tip: `agent/tracer-w1-storage` (local only; not pushed).
 
 ## Residual risks / follow-ups
 

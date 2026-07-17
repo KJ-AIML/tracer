@@ -76,7 +76,7 @@ See `docs/modules/w1-a/SHARED_MANIFEST_REQUESTS.md`:
 | SHA | Message |
 |---|---|
 | `2de7ff6f54cf2bc02e429dab647f2977d5185569` | `feat(w1-a): desktop shell, ui package, mock store, and Tauri stub` |
-| *(this amend/follow-up)* | Report SHA pin |
+| `b19202484b6ad7530aa4a9b5be92d647ac084aab` | `docs(w1-a): pin completion report commit SHA` |
 
 ## Commands run (bootstrap + finish)
 

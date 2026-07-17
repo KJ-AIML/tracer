@@ -136,7 +136,7 @@ npx --yes github:KJ-AIML/heli-harness session close --session heli-ses-b58228fd-
 | SHA | Message |
 |---|---|
 | `0cda243831401d0ec6907044e2ea9a35264c3a49` | `docs(w0-c): product UX IA, session screen, state matrix, flows` |
-| *(this report commit)* | `docs(w0-c): completion report` |
+| `04269ba1ff587c23ffb7a5192a22844c162dac8b` | `docs(w0-c): completion report` |
 
 **Post-rebase base:** `5b936412b982cc4310f1196caef023a968ea070a`  
 Local commits only — **not pushed**.

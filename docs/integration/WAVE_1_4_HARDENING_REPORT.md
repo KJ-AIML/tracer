@@ -203,10 +203,10 @@ See `docs/integration/WAVE_2_ENTRY_CRITERIA.md`. Gate 1.4 **allows** Wave 2 plan
 |---|---|
 | Separate correctness / desktop / workspace / report commits | Done via merge + recon + reports |
 | Clean integration branch | Yes |
-| main FF to integration | (finalize step) |
-| Local annotated tag `tracer-vs1-hardened` | (finalize step) |
+| main FF to integration | **done** |
+| Local annotated tag `tracer-vs1-hardened` | **done** |
 | Push | **Never** |
-| Heli lease release | (finalize step) |
+| Heli lease release | **done after finalize** |
 
 ---
 
@@ -214,6 +214,6 @@ See `docs/integration/WAVE_2_ENTRY_CRITERIA.md`. Gate 1.4 **allows** Wave 2 plan
 
 | Item | SHA |
 |---|---|
-| Integration tip (pre-FF) | `432eec519f792a8567f111a76455e0df9eacbec8` |
+| Integration tip (pre-FF) | `84160ba922144c6e47455f7de02c51374d852175` |
 | Sticky test commit | `40cf53dddcf495a23d06606fe0778cf894c8a8ad` |
 | Reports commit | `432eec519f792a8567f111a76455e0df9eacbec8` |

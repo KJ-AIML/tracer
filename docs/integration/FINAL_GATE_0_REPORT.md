@@ -440,7 +440,7 @@ git -C ../grok-build status -sb
 | W0-D merge | `1cdf3383febbe6e289f664b4d0d4c33bc961dbea` |
 | Gate 0 artifacts commit | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
 | Final main tip after FF (artifacts) | `58db0891cfc966c02e7a6f581fee2aa097e46513` |
-| Close-table refresh commit | `cb09ca0270e5853dc303005403a29053836f45a1` |
+| Close-table refresh commit | `cb09ca0270e5853dc303005403a29053836f45a1` (content); tip after finalize: `e89eb6186a2a3b8bc983fb94a9ea9bf8f2343818` |
 | Ahead of `origin/main` | 21 commits at artifacts FF; +1 after close-table refresh |
 | Lease released | Yes â€” session `heli-ses-7c2f27d1-a702-4c12-b07f-9962714c8c09` |
 | Session closed | Yes |

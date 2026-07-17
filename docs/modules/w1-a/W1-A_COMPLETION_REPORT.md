@@ -73,12 +73,10 @@ See `docs/modules/w1-a/SHARED_MANIFEST_REQUESTS.md`:
 
 ## Commits
 
-(filled after local commits)
-
 | SHA | Message |
 |---|---|
-| *(see git log)* | `feat(w1-a): desktop shell, ui package, mock store, tauri stub` |
-| *(see git log)* | `docs(w1-a): module docs, handoff, completion report` |
+| `2de7ff6f54cf2bc02e429dab647f2977d5185569` | `feat(w1-a): desktop shell, ui package, mock store, and Tauri stub` |
+| *(this amend/follow-up)* | Report SHA pin |
 
 ## Commands run (bootstrap + finish)
 

@@ -59,7 +59,7 @@
 
 | SHA | Message | Notes |
 |---|---|---|
-| *(this docs tip)* | `docs(w1.2): Gate 1.2 integration report, test matrix, W1-F handoff` | Artifacts only |
+| `bd9985cde6a7bfc449ac4f0ec54026cc291c49b2` | `docs(w1.2): Gate 1.2 integration report, test matrix, W1-F handoff` | Artifacts only |
 
 ### 5.1 Workspace registration reconciliation
 

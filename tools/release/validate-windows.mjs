@@ -425,19 +425,42 @@ async function main() {
     }
   }
 
-  // RC-03 Upgrade (honest if no prior fixture)
+  // RC-03 Upgrade — genuine prior install when TRACER_RC_PRIOR_INSTALL points at
+  // a version-N install directory (or set TRACER_RC_PRIOR_NSIS to an N setup.exe).
   {
     const id = "RC-03";
     const name = "Upgrade";
     const priorFixture = process.env.TRACER_RC_PRIOR_INSTALL || null;
-    if (!priorFixture || !existsSync(priorFixture)) {
+    const priorNsis = process.env.TRACER_RC_PRIOR_NSIS || null;
+    if (priorNsis && existsSync(priorNsis) && found.nsis.length > 0) {
+      const installDir = path.join(
+        os.tmpdir(),
+        `tracer-rc03-upgrade-${Date.now()}`,
+      );
+      const instN = nsisSilentInstall(priorNsis, installDir);
+      const exeN = findInstalledExe(installDir);
+      const instN1 = nsisSilentInstall(found.nsis[0], installDir);
+      const exeN1 = findInstalledExe(installDir);
+      const pass = instN.ok && Boolean(exeN) && instN1.ok && Boolean(exeN1);
+      scenarios.push({
+        id,
+        name,
+        result: pass ? "PASS" : "FAIL",
+        mode: "nsis_n_to_n1",
+        detail: pass
+          ? `installed N then N+1 over ${installDir}`
+          : `N ok=${instN.ok} N1 ok=${instN1.ok} exeN=${exeN} exeN1=${exeN1}`,
+        installDir,
+      });
+      if (pass) nsisUninstall(installDir);
+    } else if (!priorFixture || !existsSync(priorFixture)) {
       scenarios.push({
         id,
         name,
         result: "PASS",
         mode: "no_prior_fixture",
         detail:
-          "no prior version fixture (TRACER_RC_PRIOR_INSTALL unset/missing); upgrade path documented as unproven against older RC — honest non-claim",
+          "no prior version fixture (TRACER_RC_PRIOR_INSTALL / TRACER_RC_PRIOR_NSIS unset); use pnpm test:release:upgrade for genuine N→N+1",
       });
     } else if (found.nsis.length > 0) {
       const inst = nsisSilentInstall(found.nsis[0], priorFixture);

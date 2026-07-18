@@ -7,6 +7,9 @@
   "scripts": {
     "release:windows": "node ./windows-rc.mjs",
     "validate:windows": "node ./validate-windows.mjs",
+    "upgrade:fixture": "node ./upgrade-fixture.mjs",
+    "provenance:generate": "node ./generate-provenance.mjs",
+    "provenance:verify": "node ./verify-provenance.mjs",
     "identity": "node ./identity-check.mjs",
     "classify-signing": "node ./classify-signing.mjs"
   },

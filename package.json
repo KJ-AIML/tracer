@@ -27,6 +27,9 @@
     "test:tauri-e2e:repeat-gui": "node tools/tauri-e2e/repeat-gui.mjs",
     "release:windows": "node tools/release/windows-rc.mjs",
     "test:release:windows": "node tools/release/validate-windows.mjs",
+    "test:release:upgrade": "node tools/release/upgrade-fixture.mjs",
+    "release:provenance": "node tools/release/generate-provenance.mjs",
+    "release:provenance:verify": "node tools/release/verify-provenance.mjs",
     "validate:js": "pnpm -r run build && pnpm -r run test"
   }
 }

@@ -19,9 +19,15 @@
     "test:tauri-e2e:l3i": "node tools/tauri-e2e/l3i-infra.mjs",
     "test:tauri-e2e:gui": "node tools/tauri-e2e/l3j-gui.mjs",
     "test:tauri-e2e:setup": "node tools/tauri-driver/setup.mjs",
+<<<<<<< HEAD
     "validate:js": "pnpm -r run build && pnpm -r run test",
     "test:tauri-e2e:reliability": "node tools/tauri-e2e/reliability-selftest.mjs",
     "test:tauri-e2e:inject-fail": "node tools/tauri-e2e/inject-fail.mjs",
     "test:tauri-e2e:repeat-gui": "node tools/tauri-e2e/repeat-gui.mjs"
+=======
+    "release:windows": "node tools/release/windows-rc.mjs",
+    "test:release:windows": "node tools/release/validate-windows.mjs",
+    "validate:js": "pnpm -r run build && pnpm -r run test"
+>>>>>>> agent/tracer-w2-windows-packaging
   }
 }

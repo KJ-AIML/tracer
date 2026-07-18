@@ -354,9 +354,7 @@ pub fn plane_approval_list_pending(
     plane: &ControlPlane,
     session_id: String,
 ) -> Result<Value, String> {
-    let approvals = plane
-        .approval_list_pending(&session_id)
-        .map_err(map_err)?;
+    let approvals = plane.approval_list_pending(&session_id).map_err(map_err)?;
     Ok(json!({ "approvals": approvals }))
 }
 

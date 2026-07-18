@@ -1178,7 +1178,10 @@ async fn ms17_focus_stable_while_background_session_ingests() {
         .events_list(&background.session_id, 0, 500)
         .await
         .unwrap();
-    assert!(!eb.events.is_empty(), "background should have persisted events");
+    assert!(
+        !eb.events.is_empty(),
+        "background should have persisted events"
+    );
     assert!(event_session_ids_consistent(
         &eb.events,
         &background.session_id

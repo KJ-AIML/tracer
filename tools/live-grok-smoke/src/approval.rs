@@ -112,7 +112,12 @@ fn drain_event_types(adapter: &RuntimeAdapter, out: &mut Vec<String>, ms: u64) {
     }
 }
 
-fn push_all_scenarios(report: &mut EvidenceReport, cfg: &RunConfig, status: LiveClassification, detail: &str) {
+fn push_all_scenarios(
+    report: &mut EvidenceReport,
+    cfg: &RunConfig,
+    status: LiveClassification,
+    detail: &str,
+) {
     for id in LVA_SCENARIOS {
         if scenario_enabled(cfg, id) {
             report.scenarios.push(ScenarioResult {
@@ -875,11 +880,12 @@ fn run_one_attempt(
     let action_succeeded = *action_ok.lock().unwrap();
     let action_ms = action_elapsed_ms.lock().unwrap().clone();
     let timed_out_without_rr = *timed_out_slot.lock().unwrap() && !reverse_request_observed;
-    let terminal_observed = local_events.iter().any(|t| {
-        t == "session.completed" || t == "session.cancelled" || t == "session.failed"
-    }) || global_events.iter().any(|t| {
-        t == "session.completed" || t == "session.cancelled" || t == "session.failed"
-    });
+    let terminal_observed = local_events
+        .iter()
+        .any(|t| t == "session.completed" || t == "session.cancelled" || t == "session.failed")
+        || global_events
+            .iter()
+            .any(|t| t == "session.completed" || t == "session.cancelled" || t == "session.failed");
 
     // Natural completion without RR (not a timeout cancel). Prefer completed
     // over cancelled so timeout→cancel is NOT_OBSERVED, not UNSUPPORTED.
@@ -950,9 +956,7 @@ fn classify_lva_scenarios(
     event_types: &[String],
 ) {
     let any_rr = outcomes.iter().any(|o| o.reverse_request_observed);
-    let any_completed_no_rr = outcomes
-        .iter()
-        .any(|o| o.prompt_completed_without_approval);
+    let any_completed_no_rr = outcomes.iter().any(|o| o.prompt_completed_without_approval);
     let any_timeout_no_rr = outcomes.iter().any(|o| o.timed_out_without_rr);
     let accept = outcomes
         .iter()
@@ -1174,12 +1178,7 @@ mod tests {
             within_deadlock_budget: true,
             notes: vec![],
         }];
-        classify_lva_scenarios(
-            &mut report,
-            &cfg,
-            &outcomes,
-            &["session.completed".into()],
-        );
+        classify_lva_scenarios(&mut report, &cfg, &outcomes, &["session.completed".into()]);
         let s01 = report.scenarios.iter().find(|s| s.id == "LVA-01").unwrap();
         assert_eq!(s01.status, LiveClassification::UnsupportedByPrompt);
         let s02 = report.scenarios.iter().find(|s| s.id == "LVA-02").unwrap();
@@ -1211,12 +1210,7 @@ mod tests {
             within_deadlock_budget: true,
             notes: vec![],
         }];
-        classify_lva_scenarios(
-            &mut report,
-            &cfg,
-            &outcomes,
-            &["session.cancelled".into()],
-        );
+        classify_lva_scenarios(&mut report, &cfg, &outcomes, &["session.cancelled".into()]);
         assert_eq!(
             report
                 .scenarios

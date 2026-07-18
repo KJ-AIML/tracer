@@ -22,15 +22,17 @@ pub fn run() {
     // Tokio runtime for async control plane open before tauri loop.
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let db_path = control_plane::resolve_database_path_for_e2e(None);
-    let plane = rt.block_on(build_control_plane(db_path)).unwrap_or_else(|e| {
-        eprintln!("control plane open failed (shell will still start): {e}");
-        // Fallback: try in-memory again so commands can report StorageError paths.
-        rt.block_on(async {
-            build_control_plane(None)
-                .await
-                .expect("in-memory control plane")
-        })
-    });
+    let plane = rt
+        .block_on(build_control_plane(db_path))
+        .unwrap_or_else(|e| {
+            eprintln!("control plane open failed (shell will still start): {e}");
+            // Fallback: try in-memory again so commands can report StorageError paths.
+            rt.block_on(async {
+                build_control_plane(None)
+                    .await
+                    .expect("in-memory control plane")
+            })
+        });
 
     // Keep runtime alive for control plane background storage.
     std::mem::forget(rt);

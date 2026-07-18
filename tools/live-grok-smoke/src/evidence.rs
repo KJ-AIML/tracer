@@ -114,12 +114,7 @@ impl EvidenceReport {
         Self::new_suite(dry_run, live_opt_in, platform, SuiteKind::Lvs)
     }
 
-    pub fn new_suite(
-        dry_run: bool,
-        live_opt_in: bool,
-        platform: String,
-        suite: SuiteKind,
-    ) -> Self {
+    pub fn new_suite(dry_run: bool, live_opt_in: bool, platform: String, suite: SuiteKind) -> Self {
         let now = OffsetDateTime::now_utc();
         let generated_at = format!(
             "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
@@ -243,14 +238,12 @@ impl EvidenceReport {
 
     /// LVA overall classification: honest about non-observation (never fabricates PASS).
     fn finalize_lva_classification(&mut self) {
-        let status_of = |id: &str| {
-            self.scenarios
-                .iter()
-                .find(|s| s.id == id)
-                .map(|s| s.status)
-        };
+        let status_of = |id: &str| self.scenarios.iter().find(|s| s.id == id).map(|s| s.status);
 
-        if self.scenarios.iter().any(|s| s.status == LiveClassification::Fail)
+        if self
+            .scenarios
+            .iter()
+            .any(|s| s.status == LiveClassification::Fail)
             || self.stages.iter().any(|s| s.status == StageStatus::Fail)
         {
             // Prefer auth block when session never authenticated.
@@ -297,9 +290,9 @@ impl EvidenceReport {
         let required = [
             "LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07",
         ];
-        let all_pass = required.iter().all(|id| {
-            status_of(id) == Some(LiveClassification::Pass)
-        });
+        let all_pass = required
+            .iter()
+            .all(|id| status_of(id) == Some(LiveClassification::Pass));
         if all_pass {
             self.classification = LiveClassification::Pass;
             return;
@@ -412,7 +405,9 @@ mod tests {
     #[test]
     fn lva_finalize_never_pass_without_all_pass() {
         let mut r = EvidenceReport::new_suite(false, true, "test".into(), SuiteKind::Lva);
-        for id in ["LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07"] {
+        for id in [
+            "LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07",
+        ] {
             r.scenarios.push(ScenarioResult {
                 id: id.into(),
                 status: if id == "LVA-01" {
@@ -456,7 +451,9 @@ mod tests {
             None,
             None,
         ));
-        for id in ["LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07"] {
+        for id in [
+            "LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07",
+        ] {
             r.scenarios.push(ScenarioResult {
                 id: id.into(),
                 status: LiveClassification::BlockedByAuth,

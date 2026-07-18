@@ -29,7 +29,11 @@ async fn stress_overlapping_live_sessions() {
             break;
         }
         match cp
-            .session_create(&proj.project_id, Some(format!("ms-stress-{i}")), happy_opts())
+            .session_create(
+                &proj.project_id,
+                Some(format!("ms-stress-{i}")),
+                happy_opts(),
+            )
             .await
         {
             Ok(s) => live.push(s.session_id),
@@ -59,7 +63,11 @@ async fn stress_overlapping_live_sessions() {
         if t0.elapsed() > BUDGET {
             break;
         }
-        if cp.session_submit_prompt(sid, "ms-stress ping").await.is_ok() {
+        if cp
+            .session_submit_prompt(sid, "ms-stress ping")
+            .await
+            .is_ok()
+        {
             prompted += 1;
         }
     }
@@ -112,11 +120,7 @@ async fn stress_create_stop_cycle_with_peers() {
             break;
         }
         let s = cp
-            .session_create(
-                &proj.project_id,
-                Some(format!("cycle-{i}")),
-                happy_opts(),
-            )
+            .session_create(&proj.project_id, Some(format!("cycle-{i}")), happy_opts())
             .await
             .expect("create");
         let _ = cp.session_submit_prompt(&s.session_id, "cycle").await;

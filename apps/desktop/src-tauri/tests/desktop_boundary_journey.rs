@@ -18,10 +18,10 @@ use tracer_control_plane::RuntimeCreateOptions;
 use tracer_desktop_lib::commands::{
     plane_app_info, plane_approval_list_pending, plane_approval_resolve, plane_events_list,
     plane_heli_status, plane_presentation_focus, plane_presentation_snapshot, plane_project_list,
-    plane_project_register, plane_runtime_status, plane_session_create, plane_session_get,
-    plane_session_list, plane_session_stop, plane_session_submit_prompt, plane_session_cancel,
-    ApprovalResolveArgs, EventsListArgs, ProjectRegisterArgs, SessionCreateArgs, SessionListArgs,
-    StopArgs, SubmitPromptArgs, CancelArgs, REGISTERED_COMMANDS,
+    plane_project_register, plane_runtime_status, plane_session_cancel, plane_session_create,
+    plane_session_get, plane_session_list, plane_session_stop, plane_session_submit_prompt,
+    ApprovalResolveArgs, CancelArgs, EventsListArgs, ProjectRegisterArgs, SessionCreateArgs,
+    SessionListArgs, StopArgs, SubmitPromptArgs, REGISTERED_COMMANDS,
 };
 use tracer_desktop_lib::control_plane::{build_control_plane, discover_fake_js};
 use tracer_desktop_lib::REGISTERED_COMMANDS as LIB_REGISTERED;
@@ -44,9 +44,8 @@ fn repo_root() -> PathBuf {
 
 fn fake_js() -> PathBuf {
     let from_discover = discover_fake_js();
-    let path = from_discover.unwrap_or_else(|| {
-        repo_root().join("tools/fake-acp-runtime/bin/fake-acp-runtime.js")
-    });
+    let path = from_discover
+        .unwrap_or_else(|| repo_root().join("tools/fake-acp-runtime/bin/fake-acp-runtime.js"));
     assert!(
         path.is_file(),
         "missing fake ACP at {} — set TRACER_FAKE_ACP_JS",
@@ -74,7 +73,11 @@ fn has_type(events: &[serde_json::Value], t: &str) -> bool {
 fn event_types(events: &[serde_json::Value]) -> Vec<String> {
     events
         .iter()
-        .filter_map(|e| e.get("type").and_then(|t| t.as_str()).map(|s| s.to_string()))
+        .filter_map(|e| {
+            e.get("type")
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string())
+        })
         .collect()
 }
 
@@ -255,12 +258,10 @@ async fn journey_happy_prompt_stream_and_terminal() {
         .to_string();
 
     let listed = plane_project_list(&plane).await.expect("list");
-    assert!(
-        listed["projects"]
-            .as_array()
-            .map(|a| !a.is_empty())
-            .unwrap_or(false)
-    );
+    assert!(listed["projects"]
+        .as_array()
+        .map(|a| !a.is_empty())
+        .unwrap_or(false));
 
     // Start fake runtime via session create.
     let session_val = plane_session_create(
@@ -299,7 +300,10 @@ async fn journey_happy_prompt_stream_and_terminal() {
     .await
     .expect("prompt");
     assert!(
-        prompt.get("accepted").and_then(|v| v.as_bool()).unwrap_or(false)
+        prompt
+            .get("accepted")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
             || prompt.is_object(),
         "prompt accepted shape: {prompt}"
     );
@@ -563,9 +567,7 @@ async fn journey_close_reopen_restores_history() {
     std::env::set_var("TRACER_DATABASE_PATH", db.display().to_string());
 
     let session_id = {
-        let plane = build_control_plane(Some(db.clone()))
-            .await
-            .expect("plane1");
+        let plane = build_control_plane(Some(db.clone())).await.expect("plane1");
         let reg = plane_project_register(
             &plane,
             ProjectRegisterArgs {
@@ -629,12 +631,10 @@ async fn journey_close_reopen_restores_history() {
         )
         .await
         .expect("list sessions");
-        assert!(
-            sessions["sessions"]
-                .as_array()
-                .map(|a| !a.is_empty())
-                .unwrap_or(false)
-        );
+        assert!(sessions["sessions"]
+            .as_array()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false));
 
         let _ = plane_session_stop(
             &plane,
@@ -720,7 +720,9 @@ fn e2e_env_command_lists_registered() {
     assert_eq!(env["boundary"], "tauri-desktop");
     assert_eq!(env["module"], "W2-B");
     let cmds = env["registeredCommands"].as_array().expect("cmds");
-    assert!(cmds.iter().any(|c| c.as_str() == Some("tracer_session_create")));
+    assert!(cmds
+        .iter()
+        .any(|c| c.as_str() == Some("tracer_session_create")));
 }
 
 // ---------------------------------------------------------------------------
@@ -792,8 +794,12 @@ async fn journey_multi_session_presentation_focus_switch() {
     );
 
     // Both sessions remain independently addressable.
-    let da = plane_session_get(&plane, sid_a.clone()).await.expect("get A");
-    let db = plane_session_get(&plane, sid_b.clone()).await.expect("get B");
+    let da = plane_session_get(&plane, sid_a.clone())
+        .await
+        .expect("get A");
+    let db = plane_session_get(&plane, sid_b.clone())
+        .await
+        .expect("get B");
     assert_eq!(da["session"]["sessionId"].as_str(), Some(sid_a.as_str()));
     assert_eq!(db["session"]["sessionId"].as_str(), Some(sid_b.as_str()));
     assert_no_raw_acp(&da);

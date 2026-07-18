@@ -9,7 +9,7 @@
 | Heli session | `heli-ses-7c596a03-9e8d-4054-82b0-1b55164dbe6b` |
 | Branch | `agent/tracer-w2-upgrade-fixture` |
 | Base SHA | `4c5f5599df16325f39da1b3165d7c02be94ac0a4` |
-| Tip SHA | _(filled after commits)_ |
+| Tip SHA | `d70ca9aec8da7bf030632569de691edb7818ac46` |
 | Host | grok-build |
 
 ## Decisions (Part 13)

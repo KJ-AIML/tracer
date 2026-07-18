@@ -14,6 +14,10 @@ path = "src/stress_repeated_sessions.rs"
 name = "stress_multi_session"
 path = "src/stress_multi_session.rs"
 
+[[test]]
+name = "stress_drain_lifecycle"
+path = "src/stress_drain_lifecycle.rs"
+
 [dependencies]
 tracer-control-plane = { workspace = true }
 tracer-domain = { workspace = true }

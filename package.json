@@ -19,6 +19,9 @@
     "test:tauri-e2e:l3i": "node tools/tauri-e2e/l3i-infra.mjs",
     "test:tauri-e2e:gui": "node tools/tauri-e2e/l3j-gui.mjs",
     "test:tauri-e2e:setup": "node tools/tauri-driver/setup.mjs",
-    "validate:js": "pnpm -r run build && pnpm -r run test"
+    "validate:js": "pnpm -r run build && pnpm -r run test",
+    "test:tauri-e2e:reliability": "node tools/tauri-e2e/reliability-selftest.mjs",
+    "test:tauri-e2e:inject-fail": "node tools/tauri-e2e/inject-fail.mjs",
+    "test:tauri-e2e:repeat-gui": "node tools/tauri-e2e/repeat-gui.mjs"
   }
 }

@@ -7,11 +7,18 @@ use tracer_domain::{AuthenticationState, SessionStatus};
 /// Versioned presentation snapshot for the shell.
 ///
 /// Shell can restore from this if live events were missed.
+///
+/// - [`Self::version`] — **schema** version (wire/shape compatibility).
+/// - [`Self::revision`] — **delivery** generation; monotonic per hub publish
+///   so consumers can detect staleness and recover via a fresh pull.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PresentationSnapshot {
     /// Snapshot schema version.
     pub version: u32,
+    /// Monotonic delivery revision (0 = never published). Distinct from schema [`Self::version`].
+    #[serde(default)]
+    pub revision: u64,
     /// Active project id if any.
     pub active_project_id: Option<String>,
     /// Active session id if any.
@@ -40,6 +47,7 @@ impl Default for PresentationSnapshot {
     fn default() -> Self {
         Self {
             version: SNAPSHOT_VERSION,
+            revision: 0,
             active_project_id: None,
             active_session_id: None,
             session_status: None,
@@ -57,6 +65,25 @@ impl Default for PresentationSnapshot {
 
 /// Presentation snapshot schema version.
 pub const SNAPSHOT_VERSION: u32 = 1;
+
+/// Coalesced presentation change signal (not a full event log).
+///
+/// Consumers that miss or coalesce notifies must pull [`PresentationSnapshot`]
+/// (and/or `events_list`) for authoritative state. Duplicates are harmless.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationNotify {
+    /// Hub delivery revision after this publish.
+    pub revision: u64,
+    /// Active session id when known.
+    pub active_session_id: Option<String>,
+    /// Highest persisted sequence projected for the active session.
+    pub latest_sequence: i64,
+    /// Projected session status.
+    pub session_status: Option<SessionStatus>,
+    /// True when status is terminal or sticky terminal is set.
+    pub terminal: bool,
+}
 
 /// Pending approval view (typed; no raw ACP).
 #[derive(Debug, Clone, Serialize, Deserialize)]

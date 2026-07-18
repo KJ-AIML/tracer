@@ -116,13 +116,13 @@ L3-J / repeat-gui / inject-fail are **not** pulled by `pnpm -r test` or `cargo t
 
 ## 12. Commits
 
-Focused commits (messages):
+| SHA | Message |
+|---|---|
+| `96a4e4fb2e7bd215005c05f91aa2d1bd6702a6b3` | `test(w2.3-c): harden GUI reliability runner` |
+| `4e84b382a106a6ffbd80ea8c438a61890a5962f1` | `test(w2.3-c): add failure injection and cleanup evidence` |
+| `b5784207348abdc0bd8b2af0ac2e4bf293051786` | `docs(w2.3-c): record reliability and runner contract` |
 
-1. `test(w2.3-c): harden GUI reliability runner`
-2. `test(w2.3-c): add failure injection and cleanup evidence`
-3. `docs(w2.3-c): record reliability and runner contract`
-
-(SHAs filled after commit.)
+Branch tip at docs commit: `b5784207348abdc0bd8b2af0ac2e4bf293051786` (this file may trail tip if later SHA-pin commits exist).
 
 ## 13. Residual risks
 

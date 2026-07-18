@@ -118,9 +118,10 @@ See `docs/validation/live-grok/LIVE_GUI_RESULTS.md`.
 | SHA | Message |
 |---|---|
 | `766dd20` | test(w2.3-b): complete live GUI validation harness |
-| `(docs tip)` | docs(w2.3-b): record live GUI evidence and classifications |
+| `8ce5417` | docs(w2.3-b): record live GUI evidence and classifications |
+| `314b21d` | docs(w2.3-b): pin completion report commit SHAs |
 
-Branch tip: `8ce54178eebfa0615942be7248ff3d6e6c916795`
+Branch tip SHA is intentionally omitted from this tip-adjacent docs text to avoid self-hash ambiguity; use `git rev-parse HEAD` on `agent/tracer-w2-live-gui-validation`.
 
 ## 9. Residual risks
 

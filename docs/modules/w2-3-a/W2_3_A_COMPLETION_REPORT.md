@@ -4,7 +4,7 @@
 **Work item:** W2.3-A  
 **Branch:** `agent/tracer-w2-windows-packaging`  
 **Base SHA:** `8f3b3cb568483fde065dae77d341b38e597b23b2`  
-**Head SHA:** see Commit SHAs table (tip after docs commit; no self-hash)  
+**Head SHA:** tip after pin commit (see Commit SHAs; pin does not self-hash)  
 **Session id:** `heli-ses-26b01af7-555d-440d-a6e0-da64824c2c21`  
 **Host:** grok-build  
 **Target:** tracer  
@@ -167,9 +167,9 @@ Detailed host write-up: [`docs/validation/release/WINDOWS_RELEASE_RESULTS.md`](.
 | Commit | Summary |
 |---|---|
 | `694d06c` | feat(w2.3-a): Windows RC packaging config and release tooling |
-| *(docs tip)* | docs(w2.3-a): architecture, test matrix, results, completion |
+| `60b3f6f` | docs(w2.3-a): packaging architecture, test matrix, results, completion |
 
-The docs commit is the branch tip after this report lands; it is not listed as its own content hash to avoid self-hash ambiguity.
+Branch tip after the SHA-pin commit is the integration head pointer; that pin commit is omitted from the table to avoid self-hash ambiguity.
 
 ## Residual risk / follow-ons
 

@@ -12,6 +12,7 @@
 //! provide crash-safe commits. Interrupted transactions roll back (F-S03).
 
 use crate::error::{StorageError, StorageResult};
+use crate::{SCHEMA_LOGICAL_VERSION, SCHEMA_LOGICAL_VERSION_NUM};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Pool, Sqlite};
 use std::path::Path;
@@ -86,15 +87,22 @@ pub async fn open_database(db_path: impl AsRef<Path>, opts: OpenOptions) -> Stor
         .connect_with(connect)
         .await
         .map_err(|e| StorageError::Database {
-            message: format!("failed to open database at {}: {e}", path.display()),
+            message: format!(
+                "failed to open database at {} (corrupt or unreadable DB is refused — no silent reset): {e}",
+                path.display()
+            ),
             source: Some(e),
         })?;
 
     // Verify journal mode (defensive — options should already set WAL).
     verify_journal_mode(&pool).await?;
 
+    // UF-01: refuse unsupported future schema before applying migrations.
+    // Never silently reset or destructive-downgrade prior user data.
     if opts.run_migrations {
+        refuse_unsupported_future_schema(&pool).await?;
         run_migrations(&pool).await?;
+        ensure_schema_matches_crate(&pool).await?;
     }
 
     info!(path = %path.display(), "tracer storage database open");
@@ -120,10 +128,14 @@ pub async fn open_in_memory() -> StorageResult<DbPool> {
         .map_err(StorageError::from_sqlx)?;
 
     run_migrations(&pool).await?;
+    ensure_schema_matches_crate(&pool).await?;
     Ok(pool)
 }
 
 /// Apply embedded SQL migrations. Safe to re-run (idempotent via sqlx migrate bookkeeping).
+///
+/// Each migration runs in a transaction (sqlx default). An interrupted migration
+/// does not leave a partially-applied valid schema (UF-02).
 pub async fn run_migrations(pool: &DbPool) -> StorageResult<()> {
     // Migrations are embedded from crates/tracer-storage/migrations at compile time.
     sqlx::migrate!("./migrations")
@@ -133,6 +145,76 @@ pub async fn run_migrations(pool: &DbPool) -> StorageResult<()> {
             message: e.to_string(),
         })?;
     Ok(())
+}
+
+/// Parse a logical schema version string (`"1"`, `"2"`, …).
+pub fn parse_schema_version(raw: &str) -> StorageResult<u32> {
+    raw.trim()
+        .parse::<u32>()
+        .map_err(|_| StorageError::Migration {
+            message: format!("unparseable schema_logical_version `{raw}`"),
+        })
+}
+
+/// Controlled refusal when an existing DB advertises a newer logical schema
+/// than this binary understands (UF-01). Does not mutate the database.
+///
+/// Fresh databases (no `storage_meta` yet) are allowed through so migrations
+/// can create the schema.
+pub async fn refuse_unsupported_future_schema(pool: &DbPool) -> StorageResult<()> {
+    let raw = match get_meta(pool, "schema_logical_version").await {
+        Ok(v) => v,
+        Err(StorageError::Database { message, .. })
+            if message.contains("no such table: storage_meta")
+                || message.contains("no such table: main.storage_meta") =>
+        {
+            return Ok(());
+        }
+        Err(e) => {
+            // Also tolerate missing-table surfaced via sqlx Database errors.
+            let s = e.to_string();
+            if s.contains("no such table") && s.contains("storage_meta") {
+                return Ok(());
+            }
+            return Err(e);
+        }
+    };
+    let Some(raw) = raw else {
+        return Ok(());
+    };
+    let found = parse_schema_version(&raw)?;
+    if found > SCHEMA_LOGICAL_VERSION_NUM {
+        return Err(StorageError::Migration {
+            message: format!(
+                "unsupported future schema_logical_version={found} \
+                 (binary supports {SCHEMA_LOGICAL_VERSION}); \
+                 refusing start — no destructive downgrade or silent reset"
+            ),
+        });
+    }
+    Ok(())
+}
+
+async fn ensure_schema_matches_crate(pool: &DbPool) -> StorageResult<()> {
+    let ver = schema_logical_version(pool).await?;
+    if ver != SCHEMA_LOGICAL_VERSION {
+        return Err(StorageError::Migration {
+            message: format!(
+                "schema_logical_version after migrations is `{ver}`, \
+                 expected `{SCHEMA_LOGICAL_VERSION}`"
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Classify opening a newer-migrated DB with an older binary (UF-05).
+///
+/// Returns a stable token for release docs / upgrade harness:
+/// `CONTROLLED_REFUSAL` when the older binary cannot safely open the DB.
+pub async fn classify_downgrade_open(pool: &DbPool) -> StorageResult<&'static str> {
+    refuse_unsupported_future_schema(pool).await?;
+    Ok("SUPPORTED")
 }
 
 async fn verify_journal_mode(pool: &DbPool) -> StorageResult<()> {

@@ -46,8 +46,9 @@ pub mod repo;
 pub mod timeutil;
 
 pub use db::{
-    open_database, open_in_memory, run_migrations, schema_logical_version, writer_policy, DbPool,
-    OpenOptions,
+    classify_downgrade_open, open_database, open_in_memory, parse_schema_version,
+    refuse_unsupported_future_schema, run_migrations, schema_logical_version, writer_policy,
+    DbPool, OpenOptions,
 };
 pub use error::{StorageError, StorageErrorClass, StorageResult};
 pub use ids::{
@@ -69,4 +70,7 @@ pub use timeutil::now_rfc3339;
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Logical schema version this crate ships (must match migration seed).
-pub const SCHEMA_LOGICAL_VERSION: &str = "1";
+pub const SCHEMA_LOGICAL_VERSION: &str = "2";
+
+/// Numeric form of [`SCHEMA_LOGICAL_VERSION`] for comparison guards.
+pub const SCHEMA_LOGICAL_VERSION_NUM: u32 = 2;

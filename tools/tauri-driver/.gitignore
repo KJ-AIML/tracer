@@ -1,0 +1,6 @@
+# Downloaded / installed driver artifacts (never commit binaries)
+.cache/
+bin/
+*.exe
+*.zip
+versions.local.json

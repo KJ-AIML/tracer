@@ -2,9 +2,9 @@
 /**
  * L3-I — WebView driver infrastructure interaction (NOT product journey L3-J).
  *
- * Proves: tauri-driver startup → WebDriver session → app launch via driver →
- *         basic WebView interaction (title / root / optional Tauri detect) →
- *         session delete → driver shutdown → no orphans.
+ * Proves: build artifacts → msedgedriver path → tauri-driver → app via WebDriver
+ *         session → root marker → minimal non-product property → clean shutdown
+ *         → orphan verify.
  *
  * Does NOT: session create/prompt/approval product flow through the GUI.
  *
@@ -14,12 +14,13 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { ResultClass, StageId, Level } from "./lib/classify.mjs";
+import { ResultClass, StageId, Level, FailureCode } from "./lib/classify.mjs";
 import {
   REPO_ROOT,
   FAKE_ACP_JS,
   discoverEnvironment,
   resolvePreferredBinary,
+  resolveDriverSpawnPaths,
 } from "./lib/discover.mjs";
 import {
   spawnOwned,
@@ -60,14 +61,20 @@ async function main() {
   /** @type {import('./lib/process.mjs').OwnedProcess | null} */
   let driver = null;
   const client = new WebDriverClient(baseUrl);
+  const spawnPaths = resolveDriverSpawnPaths();
 
-  console.log("=== L3-I WebView driver infrastructure (W2.2-A) ===");
+  console.log("=== L3-I WebView driver infrastructure (W2.2-T) ===");
   console.log(`workDir: ${workDir}`);
   console.log(`driver: ${baseUrl}`);
-  console.log("NOTE: L3-J full product GUI journey is DEFERRED — not claimed.");
+  console.log(
+    `tauri-driver: ${spawnPaths.tauriPath || "MISSING"}`,
+  );
+  console.log(
+    `native-driver: ${spawnPaths.nativePath || process.env.TRACER_NATIVE_DRIVER || "default/PATH"}`,
+  );
+  console.log("NOTE: L3-J full product GUI journey is NOT_STARTED — not claimed.");
 
   try {
-    // Platform
     if (!env.os.supportedForL3I_externalDriver) {
       for (const id of Object.values(StageId)) {
         report.skip(
@@ -79,23 +86,25 @@ async function main() {
       return finish(report.summary(), {
         workDir,
         resultOverride: ResultClass.UNSUPPORTED_PLATFORM,
+        failureCode: FailureCode.UNSUPPORTED_PLATFORM,
       });
     }
 
-    // Resolve binary (do not auto-build here — keep L3-I focused; caller/L2 builds)
     let binary =
       process.env.TRACER_E2E_APP_BINARY ||
       resolvePreferredBinary()?.path ||
       null;
 
     await report.run(StageId.FRONTEND_BUILD, async () => {
-      // L3-I assumes prior build; report status only
-      const distOk = existsSync(path.join(REPO_ROOT, "apps/desktop/dist/index.html"));
+      const distOk = existsSync(
+        path.join(REPO_ROOT, "apps/desktop/dist/index.html"),
+      );
       if (!distOk) {
         return {
           status: "blocked_tooling",
           classification: ResultClass.BLOCKED_BY_TOOLING,
           message: "frontend dist missing — run L2 build first",
+          detail: { code: FailureCode.FRONTEND_DIST_NOT_FOUND },
         };
       }
       return { status: "pass", message: "frontend dist present" };
@@ -106,7 +115,9 @@ async function main() {
         return {
           status: "blocked_tooling",
           classification: ResultClass.BLOCKED_BY_TOOLING,
-          message: "app binary missing — run L2 / cargo build -p tracer-desktop first",
+          message:
+            "app binary missing — run L2 / cargo build -p tracer-desktop first",
+          detail: { code: FailureCode.APP_BINARY_NOT_FOUND },
         };
       }
       return { status: "pass", message: `binary ${binary}`, detail: { binary } };
@@ -118,30 +129,65 @@ async function main() {
           status: "blocked_tooling",
           classification: ResultClass.BLOCKED_BY_TOOLING,
           message: "no test binary",
+          detail: { code: FailureCode.APP_BINARY_NOT_FOUND },
         };
       }
       return { status: "pass", message: "test binary ready" };
     });
 
-    // Driver preflight
-    const hasDriver = env.drivers.tauriDriver.available;
+    const hasDriver = Boolean(spawnPaths.tauriPath);
+    const nativePath =
+      spawnPaths.nativePath || process.env.TRACER_NATIVE_DRIVER || null;
     const hasNative =
       env.os.platform === "win32"
-        ? env.drivers.nativeDriver.msedgedriver.available
-        : env.drivers.nativeDriver.webkitWebDriver.available;
+        ? Boolean(
+            nativePath &&
+              env.drivers.nativeDriver.msedgedriver.compatibility?.compatible,
+          )
+        : Boolean(
+            env.drivers.nativeDriver.webkitWebDriver.available || nativePath,
+          );
 
     if (!hasDriver || !hasNative) {
-      const msg = !hasDriver
-        ? "tauri-driver not on PATH (cargo install tauri-driver --locked)"
-        : env.os.platform === "win32"
-          ? "msedgedriver not on PATH"
-          : "WebKitWebDriver not on PATH";
+      let code = FailureCode.TAURI_DRIVER_NOT_FOUND;
+      let msg = "tauri-driver not found (PATH/cargo bin/project bin)";
+      if (hasDriver && env.os.platform === "win32") {
+        code =
+          env.drivers.nativeDriver.msedgedriver.compatibility?.code ||
+          FailureCode.EDGE_DRIVER_NOT_FOUND;
+        msg =
+          env.drivers.nativeDriver.msedgedriver.compatibility?.message ||
+          "msedgedriver missing or incompatible";
+      } else if (hasDriver) {
+        code = FailureCode.EDGE_DRIVER_NOT_FOUND;
+        msg = "WebKitWebDriver not on PATH";
+      }
       report.skip(StageId.DRIVER_STARTUP, msg, ResultClass.BLOCKED_BY_TOOLING);
-      report.skip(StageId.APP_LAUNCH, "blocked: no driver", ResultClass.BLOCKED_BY_TOOLING);
-      report.skip(StageId.READINESS, "blocked: no driver", ResultClass.BLOCKED_BY_TOOLING);
-      report.skip(StageId.SMOKE, "blocked: no driver", ResultClass.BLOCKED_BY_TOOLING);
-      report.skip(StageId.APP_SHUTDOWN, "blocked: no driver", ResultClass.BLOCKED_BY_TOOLING);
-      report.skip(StageId.DRIVER_SHUTDOWN, "blocked: no driver", ResultClass.BLOCKED_BY_TOOLING);
+      report.skip(
+        StageId.APP_LAUNCH,
+        "blocked: no driver",
+        ResultClass.BLOCKED_BY_TOOLING,
+      );
+      report.skip(
+        StageId.READINESS,
+        "blocked: no driver",
+        ResultClass.BLOCKED_BY_TOOLING,
+      );
+      report.skip(
+        StageId.SMOKE,
+        "blocked: no driver",
+        ResultClass.BLOCKED_BY_TOOLING,
+      );
+      report.skip(
+        StageId.APP_SHUTDOWN,
+        "blocked: no driver",
+        ResultClass.BLOCKED_BY_TOOLING,
+      );
+      report.skip(
+        StageId.DRIVER_SHUTDOWN,
+        "blocked: no driver",
+        ResultClass.BLOCKED_BY_TOOLING,
+      );
       await report.run(StageId.ORPHAN_VERIFY, async () => ({
         status: "pass",
         message: "no driver processes started",
@@ -150,6 +196,7 @@ async function main() {
         workDir,
         resultOverride: ResultClass.BLOCKED_BY_TOOLING,
         setup: msg,
+        failureCode: code,
       });
     }
 
@@ -162,26 +209,38 @@ async function main() {
       return finish(report.summary(), {
         workDir,
         resultOverride: ResultClass.BLOCKED_BY_TOOLING,
+        failureCode: FailureCode.APP_BINARY_NOT_FOUND,
       });
     }
 
     // 4) driver startup
     await report.run(StageId.DRIVER_STARTUP, async () => {
       const driverArgs = ["--port", String(port)];
-      if (process.env.TRACER_NATIVE_DRIVER) {
-        driverArgs.push("--native-driver", process.env.TRACER_NATIVE_DRIVER);
+      const native =
+        process.env.TRACER_NATIVE_DRIVER || spawnPaths.nativePath || null;
+      if (native) {
+        driverArgs.push("--native-driver", native);
       }
-      driver = spawnOwned(env.drivers.tauriDriver.path, driverArgs, {
+      driver = spawnOwned(spawnPaths.tauriPath, driverArgs, {
         label: "tauri-driver",
         logDir,
         windowsHide: true,
       });
-      if (!driver.pid) throw new Error("failed to spawn tauri-driver");
+      if (!driver.pid) {
+        throw Object.assign(new Error("failed to spawn tauri-driver"), {
+          code: FailureCode.DRIVER_STARTUP_FAILED,
+        });
+      }
       const status = await waitDriverReady(baseUrl, { timeoutMs: 25_000 });
       return {
         status: "pass",
         message: `tauri-driver ready pid=${driver.pid}`,
-        detail: { pid: driver.pid, statusCode: status.statusCode, body: status.body },
+        detail: {
+          pid: driver.pid,
+          statusCode: status.statusCode,
+          body: status.body,
+          nativeDriver: native,
+        },
       };
     });
 
@@ -206,7 +265,7 @@ async function main() {
           status: "fail",
           classification: ResultClass.FAIL,
           message: `WebDriver new session failed: HTTP ${res.statusCode} ${JSON.stringify(res.body).slice(0, 500)}`,
-          detail: res,
+          detail: { ...res, code: FailureCode.SESSION_CREATE_FAILED },
         };
       }
       return {
@@ -216,84 +275,158 @@ async function main() {
       };
     });
 
-    // 6) readiness
+    // 6) readiness — poll until title / readyState settle (WebView may boot after session create)
     let title = null;
     let rootOk = null;
     let tauriDetect = null;
     await report.run(StageId.READINESS, async () => {
-      await delay(2_000);
-      try {
-        const t = await client.getTitle();
-        title = t.body?.value ?? t.body;
-      } catch (e) {
-        title = { error: e instanceof Error ? e.message : String(e) };
+      const deadline = Date.now() + 20_000;
+      let lastReady = null;
+      while (Date.now() < deadline) {
+        try {
+          const t = await client.getTitle();
+          title = t.body?.value ?? t.body;
+        } catch (e) {
+          title = { error: e instanceof Error ? e.message : String(e) };
+        }
+        try {
+          const ready = await client.execute(`return document.readyState;`);
+          lastReady = ready.body?.value;
+        } catch {
+          lastReady = null;
+        }
+        if (title === "Tracer" && lastReady === "complete") break;
+        await delay(400);
       }
       return {
         status: "pass",
-        message: `WebDriver session responsive; title=${JSON.stringify(title)}`,
-        detail: { title },
+        message: `WebDriver session responsive; title=${JSON.stringify(title)}; readyState=${JSON.stringify(lastReady)}`,
+        detail: { title, readyState: lastReady },
       };
     });
 
     // 7) infrastructure smoke (NOT product journey)
+    // Tauri 2: withGlobalTauri is off by default → window.__TAURI__ may be absent.
+    // IPC surface is still present as __TAURI_INTERNALS__ (and product may expose __TAURI__).
+    // L3-I accepts either as proof of WebView↔Tauri bridge; does not claim L3-J.
     await report.run(StageId.SMOKE, async () => {
       const checks = {
         driverSession: Boolean(client.sessionId),
         title: title,
         frontendRoot: null,
         tauriApiDetect: null,
+        tauriSurface: null,
         pageSourceSnippet: null,
+        nonProductProperty: null,
       };
 
-      // Try to find #root
-      try {
-        const execRoot = await client.execute(
-          `return !!(document.getElementById('root') || document.body);`,
-        );
-        rootOk = execRoot.body?.value;
-        checks.frontendRoot = rootOk;
-      } catch (e) {
-        checks.frontendRoot = {
-          error: e instanceof Error ? e.message : String(e),
+      const probeScript = `
+        var root = !!(document.getElementById('root') || document.body);
+        var ready = document.readyState;
+        var g = globalThis;
+        var hasPublic = !!(g.__TAURI__ && g.__TAURI__.core && typeof g.__TAURI__.core.invoke === 'function');
+        var internals = g.__TAURI_INTERNALS__;
+        var hasInternals = !!(internals && (
+          typeof internals.invoke === 'function' ||
+          typeof internals.transformCallback === 'function' ||
+          typeof internals.metadata === 'object'
+        ));
+        var keys = Object.keys(g).filter(function (k) {
+          return k.indexOf('TAURI') !== -1 || k.indexOf('__TAURI') !== -1;
+        });
+        return {
+          root: root,
+          readyState: ready,
+          hasPublicTauri: hasPublic,
+          hasInternals: hasInternals,
+          tauriKeys: keys,
+          title: document.title || null
         };
+      `;
+
+      // Retry probes — IPC globals can appear slightly after first paint
+      let probe = null;
+      const smokeDeadline = Date.now() + 15_000;
+      while (Date.now() < smokeDeadline) {
+        try {
+          const res = await client.execute(probeScript);
+          probe = res.body?.value ?? res.body;
+          if (probe && probe.root && (probe.hasPublicTauri || probe.hasInternals)) {
+            break;
+          }
+          if (probe && probe.root && probe.readyState === "complete") {
+            // one more short wait for IPC inject
+            await delay(500);
+            const res2 = await client.execute(probeScript);
+            probe = res2.body?.value ?? res2.body;
+            break;
+          }
+        } catch (e) {
+          probe = { error: e instanceof Error ? e.message : String(e) };
+        }
+        await delay(400);
       }
 
-      // Tauri API detect
-      try {
-        const execTauri = await client.execute(
-          `return !!(globalThis.__TAURI__ && globalThis.__TAURI__.core && globalThis.__TAURI__.core.invoke);`,
-        );
-        tauriDetect = execTauri.body?.value;
-        checks.tauriApiDetect = tauriDetect;
-      } catch (e) {
-        checks.tauriApiDetect = {
-          error: e instanceof Error ? e.message : String(e),
-        };
-      }
+      rootOk = probe?.root === true;
+      checks.frontendRoot = rootOk;
+      checks.nonProductProperty = probe?.readyState ?? null;
+      checks.tauriSurface = {
+        hasPublicTauri: Boolean(probe?.hasPublicTauri),
+        hasInternals: Boolean(probe?.hasInternals),
+        tauriKeys: probe?.tauriKeys ?? null,
+      };
+      tauriDetect = Boolean(probe?.hasPublicTauri || probe?.hasInternals);
+      checks.tauriApiDetect = tauriDetect;
 
-      // Optional app info via invoke — infrastructure, not journey
-      try {
-        const info = await client.execute(
-          `return globalThis.__TAURI__?.core?.invoke ? globalThis.__TAURI__.core.invoke('tracer_app_info').then(v => JSON.stringify(v)).catch(e => String(e)) : 'no-tauri';`,
-        );
-        checks.appInfo = info.body?.value;
-      } catch (e) {
-        checks.appInfo = { error: e instanceof Error ? e.message : String(e) };
+      // Optional app info via public API only (sync-safe detect; async invoke optional)
+      if (probe?.hasPublicTauri) {
+        try {
+          // Prefer execute_async if needed later; sync probe just re-checks shape
+          const info = await client.execute(
+            `var inv = globalThis.__TAURI__ && globalThis.__TAURI__.core && globalThis.__TAURI__.core.invoke;
+             if (!inv) return 'no-tauri';
+             return 'public-invoke-present';`,
+          );
+          checks.appInfo = info.body?.value;
+        } catch (e) {
+          checks.appInfo = {
+            error: e instanceof Error ? e.message : String(e),
+          };
+        }
+      } else if (probe?.hasInternals) {
+        checks.appInfo = "internals-present-no-public-global";
+      } else {
+        checks.appInfo = "no-tauri-surface";
       }
 
       const hardFail = !checks.driverSession;
       if (hardFail) throw new Error("no driver session");
 
-      const partial =
-        checks.frontendRoot !== true || checks.tauriApiDetect !== true;
+      if (checks.frontendRoot !== true) {
+        return {
+          status: "fail",
+          classification: ResultClass.FAIL,
+          message: "root marker (#root|body) not observed",
+          detail: { checks, probe, code: FailureCode.ROOT_MARKER_MISSING },
+        };
+      }
+
+      if (!tauriDetect) {
+        // Infrastructure incomplete: driver+root OK but no Tauri IPC surface observed
+        return {
+          status: "partial",
+          classification: ResultClass.PARTIAL,
+          message:
+            "driver session + root OK; Tauri IPC surface (__TAURI__ / __TAURI_INTERNALS__) not observed (PARTIAL — still not L3-J)",
+          detail: { checks, probe, claimsL3J: false },
+        };
+      }
 
       return {
-        status: partial ? "partial" : "pass",
-        classification: partial ? ResultClass.PARTIAL : ResultClass.PASS,
-        message: partial
-          ? "driver session OK; some WebView probes incomplete (PARTIAL — still not L3-J)"
-          : "driver + WebView infrastructure probes OK (L3-I only)",
-        detail: { checks, claimsL3J: false },
+        status: "pass",
+        message:
+          "driver + WebView infrastructure probes OK (L3-I only; not L3-J product journey)",
+        detail: { checks, probe, claimsL3J: false },
       };
     });
 
@@ -330,13 +463,16 @@ async function main() {
         const reaped = reapOrphans(ORPHAN_NAMES);
         orphans = findOrphans(ORPHAN_NAMES);
         if (orphans.length) {
-          throw new Error(`orphans remain: ${JSON.stringify(orphans)}`);
+          throw Object.assign(
+            new Error(`orphans remain: ${JSON.stringify(orphans)}`),
+            { code: FailureCode.ORPHAN_PROCESS },
+          );
         }
         return {
           status: "partial",
           classification: ResultClass.PARTIAL,
           message: "orphans reaped",
-          detail: { reaped },
+          detail: { reaped, code: FailureCode.ORPHAN_PROCESS },
         };
       }
       return { status: "pass", message: "no orphans" };
@@ -354,18 +490,25 @@ async function main() {
     }
     const summary = report.summary();
     if (summary.result === ResultClass.PASS) summary.result = ResultClass.FAIL;
-    return finish(summary, {
-      workDir,
-      error: e instanceof Error ? e.message : String(e),
-    }, 1);
+    return finish(
+      summary,
+      {
+        workDir,
+        error: e instanceof Error ? e.message : String(e),
+        failureCode: e?.code || FailureCode.DRIVER_STARTUP_FAILED,
+      },
+      1,
+    );
   }
 }
 
 function finish(summary, meta, exitHint) {
   const out = {
     schemaVersion: 1,
+    module: "W2.2-T",
     level: Level.L3I_WEBVIEW_INFRA,
     result: meta.resultOverride || summary.result,
+    failureCode: meta.failureCode || null,
     stages: summary.stages,
     meta: {
       workDir: meta.workDir,
@@ -377,6 +520,8 @@ function finish(summary, meta, exitHint) {
       network: false,
       credentials: false,
       liveGrok: false,
+      isolation:
+        "NOT part of pnpm -r test or cargo test --workspace; explicit pnpm test:tauri-e2e:l3i only",
     },
   };
   if (jsonOut) {
@@ -390,6 +535,7 @@ function finish(summary, meta, exitHint) {
       );
     }
     if (meta.setup) console.log(`setup: ${meta.setup}`);
+    if (meta.failureCode) console.log(`failureCode: ${meta.failureCode}`);
   }
   try {
     writeFileSync(

@@ -1,13 +1,15 @@
 {
   "name": "@tracer/tauri-driver-tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Helpers for tauri-driver install detection and lifecycle (W2.2-A)",
+  "description": "W2.2-T helpers: tauri-driver + msedgedriver plan/apply provisioning (no auto-install without opt-in)",
   "scripts": {
     "doctor": "node ./doctor.mjs",
     "start": "node ./start-driver.mjs",
-    "print-setup": "node ./print-setup.mjs"
+    "print-setup": "node ./print-setup.mjs",
+    "setup": "node ./setup.mjs",
+    "setup:apply": "node ./setup.mjs --apply"
   },
   "engines": {
     "node": ">=20"

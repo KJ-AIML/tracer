@@ -127,15 +127,14 @@ cargo test -p tracer-control-plane --test vs_scenarios -- --test-threads=1
 
 ## Commit SHAs
 
-Head: `7a2ff78` on `agent/tracer-w2-presentation-delivery` (not pushed).
+Branch tip is local only (not pushed). Use `git log --oneline agent/tracer-w2-presentation-delivery` for the exact HEAD.
 
 | Commit | Summary |
 |---|---|
 | `c16e63d` | feat(w2-a): bounded presentation hub with coalescing notify |
 | `5ab42e0` | test(w2-a): prove presentation delivery invariants |
 | `9a75cad` | docs(w2-a): architecture, test matrix, completion report |
-| `ada0e32` | docs(w2-a): record commit SHAs in completion report |
-| `7a2ff78` | docs(w2-a): pin final head SHA in completion report |
+| `ada0e32`+ | docs(w2-a): pin SHA table / final report notes |
 ## Lease
 
 Write lease acquired via takeover; released after delivery commits (see session activity).

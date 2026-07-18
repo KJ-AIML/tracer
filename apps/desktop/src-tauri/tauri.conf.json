@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Tracer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "dev.tracer.desktop",
   "mainBinaryName": "tracer-desktop",
   "build": {
@@ -33,7 +33,7 @@
     "category": "DeveloperTool",
     "shortDescription": "Tracer desktop shell for ACP session observability",
     "longDescription": "Tracer is a desktop shell for agent control-plane sessions, presentation, and approvals. Windows RC packaging (W2.3-A) produces an NSIS installer and a portable release binary.",
-    "copyright": "Copyright © Tracer contributors",
+    "copyright": "Copyright Â© Tracer contributors",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

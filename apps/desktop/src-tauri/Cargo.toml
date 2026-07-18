@@ -1,6 +1,6 @@
 [package]
 name = "tracer-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tracer desktop shell (W1-A minimal Tauri bootstrap; control plane owned by W1-F)"
 authors = ["Tracer"]
 edition.workspace = true

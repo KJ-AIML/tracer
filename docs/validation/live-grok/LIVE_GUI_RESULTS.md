@@ -75,3 +75,15 @@ node tools/tauri-e2e/live/lgj.mjs run --out target/live-gui/live.json
 ```
 
 Update this document with observed classifications after an authorized live run.
+
+## Integration re-verify (W2.3-I / Gate 2.3)
+
+On `integration/tracer-w2-3` (session `heli-ses-9ccdc8b9-7065-43ff-b243-85efe0759187`):
+
+| Check | Result |
+|---|---|
+| `node tools/tauri-e2e/live/unit.mjs` | **PASS** |
+| `node tools/tauri-e2e/live/dry-run.mjs` | constructionPass=true; journeys **NOT_RUN**; grok discovery missing |
+| Dual opt-in + explicit `run` | Required; not satisfied this session |
+| LGJ-01…07 | Remain **NOT_RUN** (no fabricate PASS) |
+| `pnpm -r test` | Does **not** invoke live LGJ / L2 / L3-J |

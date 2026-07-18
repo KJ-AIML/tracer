@@ -63,7 +63,7 @@
 | `c607117b98bb0172a0baf4afc5ec12026de6e0b3` | `fix(w2.1): desktop presentation_focus contract for multi-session` |
 | `6e4654a23935398f351e4bbba47e0bbea1bba534` | `style(w2.1): rustfmt after A+C+B+D integration` |
 | `1941efcfaebd2d916c1d8f6c33a550a3498fcffc` | `test(w2.1): stabilize soak07 metrics under post-return drain races` |
-| *(artifacts commit)* | `docs(w2.1): Gate 2.1 integration reports and contracts` |
+| `57c534750d22f3abb061a2c14df5b94364fa683f` | `docs(w2.1): Gate 2.1 integration reports and contracts` |
 
 ## 6. Conflicts and reconciliations
 
@@ -136,6 +136,6 @@ See `docs/integration/WAVE_2_2_ENTRY_CRITERIA.md`. **No Wave 2.2 tasks created o
 
 | Item | Value |
 |---|---|
-| Integration HEAD (pre-artifact) | `1941efcfaebd2d916c1d8f6c33a550a3498fcffc` |
+| Integration HEAD | `57c534750d22f3abb061a2c14df5b94364fa683f` |
 | Local tag (on PASS finalize) | `tracer-wave2.1-runtime-polish` |
 | Remote push | **none** |

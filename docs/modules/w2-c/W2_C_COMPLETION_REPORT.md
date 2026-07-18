@@ -77,9 +77,10 @@ CI class: standard (no network / credentials / live Grok). Platform: Windows.
 
 | Commit | Summary |
 |---|---|
-| *(filled after commit)* | feat(w2-c): multi-session isolation surface + sequence repair |
-| *(filled after commit)* | test(w2-c): multi-session isolation + stress suites |
-| *(filled after commit)* | docs(w2-c): architecture, test matrix, completion report |
+| `46d6d24` | feat(w2-c): multi-session focus, shutdown, and sequence isolation |
+| `92caf1f` | test(w2-c): multi-session isolation MS-01..16 and stress suite |
+| `70e948f` | docs(w2-c): architecture, test matrix, and completion report |
+| `bec86bc` | docs(w2-c): record commit SHAs in completion report |
 
 ## Assumptions
 

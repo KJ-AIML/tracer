@@ -209,4 +209,4 @@ See `docs/integration/W2_2_B_LAUNCH_AUTHORIZATION_FINAL.md`.
 | W2.2-T pin tip | `168ee700d00e6eb3a4a51cb2f4a47a820e817bed` |
 | merge tooling | `0da9ffc5d34ac43636c1ceba79fe88b0a0d3f30a` |
 | docs gate artifacts | `7d70e37a979ec652059b59ad9933e3c87569a16c` |
-| main after FF | _(filled after FF)_ |
+| integration tip (pre-FF; main FF target) | `91004088ffa37a35434d0204abe932fd564b40b2` |

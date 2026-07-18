@@ -35,6 +35,8 @@ tmp/
 temp/
 *.tmp
 artifacts/tauri-e2e/
+artifacts/tauri-e2e-live/
+target/live-gui/
 
 # === OS / editors ===
 .DS_Store

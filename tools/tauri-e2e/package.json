@@ -1,9 +1,9 @@
 {
   "name": "@tracer/tauri-e2e",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "W2.2-A Tauri E2E infrastructure: doctor, L0-L1 boundary, L2 smoke, L3-I driver infra (not L3-J product journey)",
+  "description": "W2.2-T Tauri E2E tooling: doctor plan/apply, L0-L1 boundary, L2 smoke, L3-I driver infra (not L3-J product journey)",
   "scripts": {
     "test": "node ./run.mjs",
     "test:policy": "node ./run.mjs --policy-only",
@@ -11,10 +11,13 @@
     "test:gui-probe": "node ./run.mjs --gui-probe",
     "doctor": "node ./doctor.mjs",
     "doctor:json": "node ./doctor.mjs --json",
+    "doctor:apply": "node ./doctor.mjs --apply",
     "test:l2": "node ./l2-smoke.mjs",
     "test:l3i": "node ./l3i-infra.mjs",
     "test:all": "node ./run.mjs --all",
-    "test:tauri-e2e:doctor": "node ./doctor.mjs"
+    "test:tauri-e2e:doctor": "node ./doctor.mjs",
+    "test:tauri-e2e:l2": "node ./l2-smoke.mjs",
+    "test:tauri-e2e:l3i": "node ./l3i-infra.mjs"
   },
   "engines": {
     "node": ">=20"

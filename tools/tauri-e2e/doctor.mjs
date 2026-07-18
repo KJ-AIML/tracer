@@ -1,35 +1,52 @@
 #!/usr/bin/env node
 /**
- * Tauri E2E doctor — environment discovery + readiness classification.
+ * Tauri E2E doctor — environment discovery + readiness classification (W2.2-T).
+ *
+ * Modes:
+ *   plan (default)  — inventory only, no install
+ *   apply           — opt-in provisioning via tools/tauri-driver/setup.mjs
+ *
+ * Apply authorization:
+ *   --apply  OR  TRACER_TAURI_E2E_SETUP=1
  *
  * Exit codes:
- *   0  READY (or only BUILD_REQUIRED / DRIVER_UNAVAILABLE advisory for L3-I)
- *   2  blocked (MISSING_TOOL / WEBVIEW_UNAVAILABLE / UNSUPPORTED / INCOMPATIBLE)
+ *   0  READY (or advisory BUILD_REQUIRED / DRIVER_UNAVAILABLE when L0/L1 ok)
+ *   2  blocked hard (MISSING critical / WEBVIEW / UNSUPPORTED / INCOMPATIBLE)
  *   1  unexpected error
  *
  * Usage:
  *   node tools/tauri-e2e/doctor.mjs
  *   node tools/tauri-e2e/doctor.mjs --json
- *   pnpm --filter @tracer/tauri-e2e doctor
+ *   node tools/tauri-e2e/doctor.mjs --apply
+ *   pnpm test:tauri-e2e:doctor
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import {
   DoctorClass,
   CiClass,
   Level,
   worstDoctorClass,
+  ComponentStatus,
 } from "./lib/classify.mjs";
 import { runDiscovery, REPO_ROOT } from "./lib/discover.mjs";
 
 const args = new Set(process.argv.slice(2));
 const asJson = args.has("--json");
 const writeReport = args.has("--write-report");
+const wantApply =
+  args.has("--apply") ||
+  process.env.TRACER_TAURI_E2E_SETUP === "1" ||
+  process.env.TRACER_TAURI_E2E_SETUP === "true";
+const planOnly = args.has("--plan") || !wantApply;
 
 function printHuman(report) {
-  const { env, issues, capabilities, classification, ci } = report;
-  console.log("=== Tauri E2E Doctor (W2.2-A) ===");
+  const { env, issues, capabilities, classification, ci, components, mode } =
+    report;
+  console.log("=== Tauri E2E Doctor (W2.2-T) ===");
+  console.log(`mode: ${mode}`);
   console.log(`repo: ${env.paths.repoRoot}`);
   console.log(`os: ${env.os.platform}/${env.os.arch} (${env.os.release})`);
   console.log(`rustc: ${env.rust.rustc || "MISSING"}`);
@@ -43,27 +60,69 @@ function printHuman(report) {
     `webview: ${env.webview.available ? env.webview.version || "present" : "UNAVAILABLE"}`,
   );
   console.log(
-    `tauri-driver: ${env.drivers.tauriDriver.available ? env.drivers.tauriDriver.path : "MISSING"}`,
+    `edge: ${
+      env.drivers.edgeBrowser?.available
+        ? env.drivers.edgeBrowser.version || "present"
+        : env.os.platform === "win32"
+          ? "MISSING"
+          : "N/A"
+    }`,
+  );
+  console.log(
+    `tauri-driver: ${
+      env.drivers.tauriDriver.available
+        ? `${env.drivers.tauriDriver.version || "present"} @ ${env.drivers.tauriDriver.pathRedacted}`
+        : "MISSING"
+    }`,
   );
   if (env.os.platform === "win32") {
+    const md = env.drivers.nativeDriver.msedgedriver;
     console.log(
-      `msedgedriver: ${env.drivers.nativeDriver.msedgedriver.available ? env.drivers.nativeDriver.msedgedriver.path : "MISSING"}`,
+      `msedgedriver: ${
+        md.available
+          ? `${md.version || "UNVERIFIED"} @ ${md.pathRedacted}`
+          : "MISSING"
+      }`,
     );
+    if (md.compatibility) {
+      console.log(
+        `  compatibility: ${md.compatibility.code} — ${md.compatibility.message}`,
+      );
+      console.log(`  rule: ${md.compatibility.rule || "major(msedgedriver)==major(Edge)"}`);
+    }
   }
   console.log(
     `frontendDist: ${env.build.frontendDistPresent ? env.paths.frontendDist : "MISSING"}`,
   );
   console.log(
-    `appBinary: ${env.paths.appBinary || "MISSING (build required)"}`,
+    `appBinary: ${env.paths.appBinaryRedacted || "MISSING (build required)"}`,
   );
   console.log(
     `fakeAcp: ${env.paths.fakeAcpPresent ? env.paths.fakeAcpJs : "MISSING"}`,
   );
-  console.log(`ports: viteDev=${env.ports.viteDev} tauriDriver=${env.ports.tauriDriverDefault}`);
+  console.log(
+    `ports: viteDev=${env.ports.viteDev} tauriDriver=${env.ports.tauriDriverDefault} available=${env.ports.tauriDriver.available}`,
+  );
+  console.log(
+    `processCleanup: ${env.processCleanup.available ? env.processCleanup.method : "UNAVAILABLE"}`,
+  );
+  console.log("");
+  console.log("Components:");
+  for (const c of components || []) {
+    const ver = c.version ? ` version=${c.version}` : "";
+    const p = c.path ? ` path=${c.path}` : "";
+    const code = c.code ? ` code=${c.code}` : "";
+    console.log(`  ${c.id}: ${c.status}${ver}${p}${code}`);
+  }
   console.log("");
   console.log("Capabilities:");
   for (const [level, info] of Object.entries(capabilities)) {
-    if (level === "blockers" || !info || typeof info !== "object" || !("attemptable" in info)) {
+    if (
+      level === "blockers" ||
+      !info ||
+      typeof info !== "object" ||
+      !("attemptable" in info)
+    ) {
       continue;
     }
     console.log(
@@ -83,17 +142,25 @@ function printHuman(report) {
       console.log(`  [${i.class}] ${i.code}: ${i.message}`);
       if (i.setup) console.log(`    setup: ${i.setup}`);
       if (i.fallback) console.log(`    fallback: ${i.fallback}`);
+      if (i.rule) console.log(`    rule: ${i.rule}`);
     }
   } else {
     console.log("Issues: none");
   }
+  if (planOnly && classification !== DoctorClass.READY) {
+    console.log("");
+    console.log(
+      "Plan mode: no installs performed. Authorize apply with --apply or TRACER_TAURI_E2E_SETUP=1",
+    );
+  }
   console.log("");
-  console.log("L3-J full GUI product journey: DEFERRED (not claimed by W2.2-A)");
+  console.log(
+    "L3-J full GUI product journey: NOT_STARTED (not claimed by W2.2-T tooling)",
+  );
 }
 
 function ciGuidance(env, capabilities, classification) {
   const list = [CiClass.MANUAL_LOCAL];
-  // L0+L1 always standard CI when tools present
   if (capabilities.L0.attemptable && capabilities.L1.attemptable) {
     list.unshift(CiClass.STANDARD_CI);
   }
@@ -114,8 +181,8 @@ function ciGuidance(env, capabilities, classification) {
 /**
  * Exit policy:
  * - READY → 0
- * - BUILD_REQUIRED / DRIVER_UNAVAILABLE alone (still can run L0/L1) → 0 with advisory
- * - MISSING critical tools, WEBVIEW_UNAVAILABLE, INCOMPATIBLE, UNSUPPORTED → 2
+ * - BUILD_REQUIRED / DRIVER_UNAVAILABLE alone (still can run L0/L1) → 0 advisory
+ * - MISSING critical tools, WEBVIEW_UNAVAILABLE, INCOMPATIBLE, UNSUPPORTED → 2 when L0/L1 blocked
  */
 function exitCode(classification, capabilities) {
   if (classification === DoctorClass.READY) return 0;
@@ -123,7 +190,6 @@ function exitCode(classification, capabilities) {
     classification === DoctorClass.BUILD_REQUIRED ||
     classification === DoctorClass.DRIVER_UNAVAILABLE
   ) {
-    // Advisory: L0/L1 may still run
     return capabilities.L0.attemptable || capabilities.L1.attemptable ? 0 : 2;
   }
   if (
@@ -132,12 +198,16 @@ function exitCode(classification, capabilities) {
     classification === DoctorClass.WEBVIEW_UNAVAILABLE ||
     classification === DoctorClass.UNSUPPORTED_PLATFORM
   ) {
-    // If L0 still works, soft-fail with 0 when only optional tools missing?
-    // Hard tools (node/rust) that break L0/L1 → 2
     if (!capabilities.L0.attemptable && !capabilities.L1.attemptable) return 2;
-    // optional tool missing but L0/L1 ok → 0 advisory
     if (
       classification === DoctorClass.MISSING_TOOL &&
+      (capabilities.L0.attemptable || capabilities.L1.attemptable)
+    ) {
+      return 0;
+    }
+    // version mismatch of edge driver: advisory 0 if L0/L1 ok
+    if (
+      classification === DoctorClass.INCOMPATIBLE_VERSION &&
       (capabilities.L0.attemptable || capabilities.L1.attemptable)
     ) {
       return 0;
@@ -147,38 +217,68 @@ function exitCode(classification, capabilities) {
   return 0;
 }
 
+function runApply() {
+  const setup = path.join(REPO_ROOT, "tools/tauri-driver/setup.mjs");
+  console.log(`[doctor] apply → node ${setup} --apply`);
+  const r = spawnSync(process.execPath, [setup, "--apply"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 900_000,
+    env: { ...process.env, TRACER_TAURI_E2E_SETUP: "1" },
+  });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  return {
+    ok: r.status === 0,
+    status: r.status,
+    error: r.error ? r.error.message : null,
+  };
+}
+
 function main() {
   try {
-    const { env, issues, capabilities } = runDiscovery();
-    // Filter: tauri_cli missing is advisory only (not hard blocker for READY-ish)
+    let applyResult = null;
+    if (wantApply) {
+      applyResult = runApply();
+    }
+
+    const { env, issues, capabilities, components } = runDiscovery();
     const hardIssues = issues.filter((i) => i.code !== "tauri_cli");
     const classification =
       hardIssues.length === 0
         ? DoctorClass.READY
         : worstDoctorClass(hardIssues);
 
-    // READY means L2 process path can be attempted after optional build.
-    // If only BUILD_REQUIRED + DRIVER_UNAVAILABLE, classification stays those.
     const ci = ciGuidance(env, capabilities, classification);
 
     const report = {
       schemaVersion: 1,
-      module: "W2.2-A",
-      task: "tracer-w2-tauri-e2e-infrastructure",
+      module: "W2.2-T",
+      task: "tracer-w2-webview-tooling",
+      mode: wantApply ? "apply" : "plan",
       classification,
       doctorClasses: DoctorClass,
       levels: Level,
       ci,
+      components,
       capabilities,
       issues,
       env,
+      apply: applyResult,
       notes: {
-        l3j: "DEFERRED — full GUI product journey is future W2.2-B; not claimed",
-        network: "no",
+        l3j: "NOT_STARTED — full GUI product journey is future W2.2-B; not claimed",
+        network: wantApply
+          ? "one-time driver download may use network during apply"
+          : "no",
         credentials: "no",
         liveGrok: "no",
         fakeAcp: "optional for pure process smoke; yes for boundary L1",
         tempSqlite: "yes if needed",
+        applyAuth: "TRACER_TAURI_E2E_SETUP=1 or --apply",
+        compatibilityRule: "major(msedgedriver) == major(Edge)",
+        ciIsolation:
+          "L3-I not in pnpm -r test / cargo workspace; use pnpm test:tauri-e2e:l3i",
       },
     };
 
@@ -191,12 +291,16 @@ function main() {
     if (writeReport) {
       const outDir = path.join(REPO_ROOT, "docs/validation/tauri");
       mkdirSync(outDir, { recursive: true });
-      const out = path.join(outDir, "TAURI_E2E_DOCTOR_LAST.json");
+      const out = path.join(outDir, "WEBVIEW_DRIVER_READINESS_LAST.json");
       writeFileSync(out, JSON.stringify(report, null, 2), "utf8");
       if (!asJson) console.log(`wrote ${out}`);
     }
 
-    process.exitCode = exitCode(classification, capabilities);
+    if (wantApply && applyResult && !applyResult.ok) {
+      process.exitCode = 2;
+    } else {
+      process.exitCode = exitCode(classification, capabilities);
+    }
   } catch (e) {
     console.error("[doctor] FAILED:", e instanceof Error ? e.message : e);
     process.exitCode = 1;

@@ -65,3 +65,30 @@ GJ-01…GJ-12 all **PASS** on each of the five runs (startup, create session, st
 `windows_gui_runner | platform_gated_ci | manual_local`  
 **Not** part of `pnpm -r test` / `cargo test --workspace`.  
 Contract: `docs/validation/tauri/WINDOWS_GUI_RUNNER_CONTRACT.md`
+
+## Integration re-run (W2.3-I / Gate 2.3)
+
+**Branch:** `integration/tracer-w2-3`  
+**Session:** `heli-ses-9ccdc8b9-7065-43ff-b243-85efe0759187`  
+**Batch:** `repeat-2026-07-18T15-19-04-404Z-1148`  
+**Command:** `pnpm test:tauri-e2e:repeat-gui -- --runs 5 --skip-build`
+
+| Metric | Value |
+|---|---|
+| Consecutive first-attempt PASS | **5/5** |
+| Product assertion failures | **0** |
+| Orphans | **0** |
+| Port collisions | **0** |
+| Temp cleanup failures | **0** |
+| Unsanitized artifacts | **0** (per-run artifactAudit.ok) |
+| Product-assert retries | **0** |
+| inject-fail | **PASS 113/113** |
+| reliability-selftest | **PASS 18/18** |
+
+| Run | Run ID | Result | Journeys | Duration (ms) | Retries |
+|---|---|---|---|---|---|
+| 1 | `l3j-2026-07-18T15-19-07-370Z-40020` | PASS | 12/12 | 53629 | 0 |
+| 2 | `l3j-2026-07-18T15-20-01-216Z-19236` | PASS | 12/12 | 52377 | 0 |
+| 3 | `l3j-2026-07-18T15-20-53-403Z-39440` | PASS | 12/12 | 50504 | 0 |
+| 4 | `l3j-2026-07-18T15-21-43-914Z-23956` | PASS | 12/12 | 50452 | 0 |
+| 5 | `l3j-2026-07-18T15-22-35-037Z-13252` | PASS | 12/12 | 50870 | 0 |

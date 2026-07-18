@@ -67,14 +67,26 @@ impl Default for ControlPlaneConfig {
 }
 
 /// Main control plane handle.
+///
+/// # Multi-session model (W2-C)
+///
+/// - Many **local** Tracer sessions may be live concurrently (HashMap registry).
+/// - Each live session has its own adapter process, drain/pump, state, approvals,
+///   and storage-authoritative sequence counter (`next_sequence` is per-session).
+/// - **One prompt in flight per session** (status must be `Ready` to submit).
+/// - **Parallel prompts across different sessions are allowed** (no global prompt lock).
+/// - Presentation snapshot tracks a single **focused** session (`active_session_id`);
+///   use [`ControlPlane::presentation_focus`] to switch without stopping others.
+/// - Shared SQLite is the sole writer; isolation is by `session_id` keys, not by
+///   separate databases. Persistence failures set `persist_failed` on that session only.
 pub struct ControlPlane {
     storage: SqliteStorage,
     config: ControlPlaneConfig,
     /// Live sessions keyed by Tracer session id string.
     sessions: Mutex<HashMap<String, Arc<LiveSession>>>,
-    /// Presentation fan-out (optional).
+    /// Presentation fan-out (optional). Shared bus; envelopes carry `sessionId`.
     presentation_tx: Mutex<Option<Sender<PresentationEvent>>>,
-    /// Cached presentation snapshot.
+    /// Cached presentation snapshot (single focused session).
     snapshot: Mutex<PresentationSnapshot>,
 }
 
@@ -131,6 +143,61 @@ impl ControlPlane {
     /// Current presentation snapshot (versioned; shell-restorable).
     pub fn snapshot(&self) -> PresentationSnapshot {
         self.snapshot.lock().expect("snap").clone()
+    }
+
+    /// Switch presentation focus to `session_id` without stopping other sessions.
+    ///
+    /// Live sessions project from runtime state; history-only (restart) sessions
+    /// project from durable storage. Returns the updated snapshot.
+    pub async fn presentation_focus(
+        &self,
+        session_id: &str,
+    ) -> ControlPlaneResult<PresentationSnapshot> {
+        let sid = SessionId::parse(session_id)
+            .map_err(|_| ControlPlaneError::invalid_argument("invalid sessionId"))?;
+
+        let live_opt = {
+            self.sessions
+                .lock()
+                .expect("sessions")
+                .get(session_id)
+                .cloned()
+        };
+
+        if let Some(live) = live_opt {
+            self.refresh_snapshot_for(&live);
+            return Ok(self.snapshot());
+        }
+
+        // History-only focus (post-restart / after stop).
+        let rec = self.storage.get_session(&sid).await?;
+        let events = self.storage.list_events(&sid, 0, 1).await?;
+        let mut snap = self.snapshot.lock().expect("snap");
+        snap.version = SNAPSHOT_VERSION;
+        snap.active_project_id = Some(rec.project_id.to_string());
+        snap.active_session_id = Some(rec.session_id.to_string());
+        snap.session_status = Some(rec.status);
+        snap.auth_state = AuthenticationState::NotRequired;
+        snap.pending_approvals.clear();
+        snap.last_error = rec.last_error.clone();
+        snap.capabilities = rec.capabilities.clone();
+        snap.latest_sequence = events.latest_sequence;
+        snap.prompt_in_flight = false;
+        snap.runtime_observation = runtime_observation(false, false, false, rec.status);
+        Ok(snap.clone())
+    }
+
+    /// Live (in-memory) Tracer session ids currently held by this plane.
+    pub fn live_session_ids(&self) -> Vec<String> {
+        let sessions = self.sessions.lock().expect("sessions");
+        let mut ids: Vec<String> = sessions.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
+    /// Number of live sessions (diagnostics / leak assertions).
+    pub fn live_session_count(&self) -> usize {
+        self.sessions.lock().expect("sessions").len()
     }
 
     /// Refresh Heli read-only status into snapshot (never crashes).
@@ -392,6 +459,18 @@ impl ControlPlane {
                 // Ingest pump may already have advanced next_sequence.
                 self.update_session_preserving_sequence(rec).await?;
 
+                // W2-C multi-session: transient UNIQUE/next_sequence races during create
+                // must not sticky-poison a Ready session (persist_failed is per-session).
+                {
+                    let mut st = live.state.lock().expect("state");
+                    if st.persist_failed {
+                        // Repair next_sequence once more before clearing sticky flag.
+                        let _ = self.repair_session_next_sequence(&session_id).await;
+                        st.persist_failed = false;
+                    }
+                    st.status = SessionStatus::Ready;
+                }
+
                 {
                     self.sessions
                         .lock()
@@ -402,6 +481,8 @@ impl ControlPlane {
                 self.refresh_snapshot_for(&live);
                 // Brief drain so session.ready is persisted for tests.
                 tokio::time::sleep(Duration::from_millis(100)).await;
+                // Second repair after drain in case pump raced during metadata write.
+                let _ = self.repair_session_next_sequence(&session_id).await;
                 Ok(self.session_detail_from_live(&live).await?)
             }
             Err(e) => {
@@ -487,7 +568,7 @@ impl ControlPlane {
         }
         let live = self.live(session_id)?;
         {
-            let st = live.state.lock().expect("state");
+            let mut st = live.state.lock().expect("state");
             if st.status != SessionStatus::Ready {
                 return Err(ControlPlaneError::invalid_state(format!(
                     "cannot submit prompt while status={}",
@@ -506,7 +587,22 @@ impl ControlPlane {
                     "session not ready for prompts",
                 ));
             }
+            // New prompt cycle on a Ready session: drop sticky create-time persist
+            // failures so one transient UNIQUE race does not poison the session.
+            // True mid-prompt persist failure is re-evaluated after the RPC returns.
+            st.persist_failed = false;
         }
+
+        // Ensure storage next_sequence is ahead of committed events before stream.
+        let sid_parsed = SessionId::parse(session_id)
+            .map_err(|_| ControlPlaneError::invalid_argument("invalid sessionId"))?;
+        let _ = self.repair_session_next_sequence(&sid_parsed).await;
+        let seq_before = self
+            .storage
+            .list_events(&sid_parsed, 0, 1)
+            .await
+            .map(|e| e.latest_sequence)
+            .unwrap_or(0);
 
         let prompt_id = uuid::Uuid::new_v4().to_string();
         let agent_run_id = uuid::Uuid::new_v4().to_string();
@@ -519,10 +615,7 @@ impl ControlPlane {
         }
         let _ = self
             .storage
-            .update_session_status(
-                &SessionId::parse(session_id).unwrap(),
-                SessionStatus::Running,
-            )
+            .update_session_status(&sid_parsed, SessionStatus::Running)
             .await;
 
         let adapter = Arc::clone(&live.adapter);
@@ -576,10 +669,29 @@ impl ControlPlane {
                     st.persist_failed
                 };
                 if persist_failed {
-                    return Err(ControlPlaneError::from_class(
-                        ErrorClass::StorageError,
-                        "prompt finished but persistence failed; not claiming complete",
-                    ));
+                    // Attempt sequence repair + short re-drain: unique races are often
+                    // recoverable and later events may already be committed.
+                    let _ = self.repair_session_next_sequence(&sid_parsed).await;
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                    let seq_after = self
+                        .storage
+                        .list_events(&sid_parsed, 0, 1)
+                        .await
+                        .map(|e| e.latest_sequence)
+                        .unwrap_or(0);
+                    // Recover when the prompt stream advanced durable history for
+                    // this session (create-time events alone do not count).
+                    let recovered = seq_after > seq_before;
+                    if !recovered {
+                        return Err(ControlPlaneError::from_class(
+                            ErrorClass::StorageError,
+                            "prompt finished but persistence failed; not claiming complete",
+                        ));
+                    }
+                    {
+                        let mut st = live.state.lock().expect("state");
+                        st.persist_failed = false;
+                    }
                 }
                 self.refresh_snapshot_for(&live);
                 Ok(SubmitPromptResult {
@@ -729,6 +841,18 @@ impl ControlPlane {
                 .await;
         }
         self.sessions.lock().expect("sessions").remove(session_id);
+        // Clear presentation focus if this session was active (other sessions stay live).
+        {
+            let mut snap = self.snapshot.lock().expect("snap");
+            if snap.active_session_id.as_deref() == Some(session_id) {
+                snap.active_session_id = None;
+                snap.prompt_in_flight = false;
+                snap.pending_approvals.clear();
+                snap.session_status = Some(SessionStatus::Stopped);
+                snap.runtime_observation =
+                    runtime_observation(false, false, false, SessionStatus::Stopped);
+            }
+        }
         Ok(json!({ "stopped": true }))
     }
 
@@ -906,7 +1030,11 @@ impl ControlPlane {
         }
     }
 
-    /// Shutdown all live sessions (app exit).
+    /// Shutdown all live sessions deterministically (app exit).
+    ///
+    /// Stops each live session (best-effort), then clears the registry and
+    /// presentation focus so no live process/task/channel remains owned by
+    /// this plane. History remains readable via storage.
     pub async fn shutdown_all(&self) -> ControlPlaneResult<()> {
         let keys: Vec<String> = self
             .sessions
@@ -915,8 +1043,25 @@ impl ControlPlane {
             .keys()
             .cloned()
             .collect();
+        // Stable order for deterministic teardown.
+        let mut keys = keys;
+        keys.sort();
         for k in keys {
             let _ = self.session_stop(&k, false).await;
+        }
+        // Force-clear any residual (e.g. stop errors) so registry is empty.
+        {
+            let mut sessions = self.sessions.lock().expect("sessions");
+            // Dropping LiveSession stops ingestors and shuts down adapters.
+            sessions.clear();
+        }
+        {
+            let mut snap = self.snapshot.lock().expect("snap");
+            snap.active_session_id = None;
+            snap.prompt_in_flight = false;
+            snap.pending_approvals.clear();
+            snap.session_status = None;
+            snap.runtime_observation = "unknown".into();
         }
         Ok(())
     }
@@ -964,17 +1109,45 @@ impl ControlPlane {
         mut rec: SessionRecord,
     ) -> ControlPlaneResult<()> {
         let sid = rec.session_id;
-        for _ in 0..8 {
+        // Preserve the metadata fields the caller wants to write.
+        let title = rec.title.clone();
+        let status = rec.status;
+        let runtime_kind = rec.runtime_kind.clone();
+        let runtime_session_id = rec.runtime_session_id.clone();
+        let capabilities = rec.capabilities.clone();
+        let last_error = rec.last_error.clone();
+        let active_agent_run_id = rec.active_agent_run_id;
+
+        for _ in 0..12 {
             let current = self.storage.get_session(&sid).await?;
             let events = self.storage.list_events(&sid, 0, 1).await?;
             // next must stay strictly ahead of the highest committed event.
+            // Also prefer in-memory latest when live (pump may be mid-write).
+            let sid_key = sid.to_string();
+            let live_latest = self
+                .sessions
+                .lock()
+                .expect("sessions")
+                .get(&sid_key)
+                .map(|l| l.state.lock().expect("state").latest_sequence)
+                .unwrap_or(0);
             let min_next = (events.latest_sequence + 1)
                 .max(current.next_sequence)
                 .max(rec.next_sequence)
+                .max(live_latest + 1)
                 .max(1);
-            rec.next_sequence = min_next;
-            rec.updated_at = now_rfc3339();
-            self.storage.update_session(&rec).await?;
+
+            let mut write = current;
+            write.title = title.clone();
+            write.status = status;
+            write.runtime_kind = runtime_kind.clone();
+            write.runtime_session_id = runtime_session_id.clone();
+            write.capabilities = capabilities.clone();
+            write.last_error = last_error.clone();
+            write.active_agent_run_id = active_agent_run_id;
+            write.next_sequence = min_next;
+            write.updated_at = now_rfc3339();
+            self.storage.update_session(&write).await?;
 
             let after = self.storage.get_session(&sid).await?;
             let events_after = self.storage.list_events(&sid, 0, 1).await?;
@@ -982,12 +1155,39 @@ impl ControlPlane {
                 return Ok(());
             }
             // Pump advanced during write; repair and retry.
-            rec = after;
             rec.next_sequence = events_after.latest_sequence + 1;
         }
         Err(ControlPlaneError::internal(
             "failed to update session without clobbering next_sequence",
         ))
+    }
+
+    /// Ensure `sessions.next_sequence` is strictly ahead of the highest event.
+    ///
+    /// Multi-session / multi-writer safety: metadata updates and concurrent
+    /// `append_event` can briefly desync the counter; repair without touching
+    /// other session rows.
+    async fn repair_session_next_sequence(&self, sid: &SessionId) -> ControlPlaneResult<()> {
+        for _ in 0..8 {
+            let mut rec = self.storage.get_session(sid).await?;
+            let events = self.storage.list_events(sid, 0, 1).await?;
+            let sid_key = sid.to_string();
+            let live_latest = self
+                .sessions
+                .lock()
+                .expect("sessions")
+                .get(&sid_key)
+                .map(|l| l.state.lock().expect("state").latest_sequence)
+                .unwrap_or(0);
+            let need = (events.latest_sequence + 1).max(live_latest + 1).max(1);
+            if rec.next_sequence >= need && rec.next_sequence > events.latest_sequence {
+                return Ok(());
+            }
+            rec.next_sequence = need.max(rec.next_sequence);
+            rec.updated_at = now_rfc3339();
+            self.storage.update_session(&rec).await?;
+        }
+        Ok(())
     }
 
     async fn session_detail_from_live(

@@ -81,6 +81,8 @@ importers:
 
   tools/fake-acp-runtime: {}
 
+  tools/tauri-driver: {}
+
   tools/tauri-e2e: {}
 
 packages:

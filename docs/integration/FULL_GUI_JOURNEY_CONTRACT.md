@@ -1,8 +1,8 @@
-﻿# Full GUI Journey Contract (L3-J / Gate 2.2.3)
+# Full GUI Journey Contract (L3-J / Gate 2.2.3)
 
 **Status:** Active after Gate 2.2.3 PASS  
 **Owner surface:** `tools/tauri-e2e/l3j-gui.mjs` + `apps/desktop` product GUI  
-**Isolation:** Explicit `pnpm test:tauri-e2e:gui` only — **not** part of `pnpm -r test` or `cargo test --workspace`
+**Isolation:** Explicit `pnpm test:tauri-e2e:gui` only - **not** part of `pnpm -r test` or `cargo test --workspace`
 
 ## Purpose
 
@@ -47,7 +47,7 @@ Allowed non-GUI setup only:
 
 - temp dirs, env file, fake ACP scenario selection via product scenario dropdown  
 - driver/session lifecycle  
-- diagnostic invoke (`tracer_e2e_env`, project list) for restart/env verification — **not** as prompt/approval shortcut  
+- diagnostic invoke (`tracer_e2e_env`, project list) for restart/env verification - **not** as prompt/approval shortcut  
 - harness orphan reap after teardown
 
 ## Classification

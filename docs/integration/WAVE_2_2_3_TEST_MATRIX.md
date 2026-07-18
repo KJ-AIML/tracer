@@ -1,8 +1,8 @@
-﻿# Wave 2.2.3 Test Matrix — L3-J Full GUI + regression
+# Wave 2.2.3 Test Matrix - L3-J Full GUI + regression
 
 **Gate:** 2.2.3  
 **Date:** 2026-07-18  
-**Host:** Windows · grok-build · fake ACP only
+**Host:** Windows | grok-build | fake ACP only
 
 ## 1. Journey matrix (L3-J)
 
@@ -21,7 +21,7 @@
 | GJ-11 | invoke_failure_fail_closed | PASS | PASS | no silent mock |
 | GJ-12 | clean_shutdown | PASS | PASS | orphan verify clean |
 
-**Aggregate:** L3-J **PASS** (12/12) × 2 serial full-suite runs.
+**Aggregate:** L3-J **PASS** (12/12) x 2 serial full-suite runs.
 
 ## 2. Infrastructure levels
 
@@ -31,7 +31,7 @@
 | L0+L1 | `pnpm -r test` / `pnpm test:tauri-e2e` | PASS |
 | L2 | `pnpm test:tauri-e2e:l2` | PASS |
 | L3-I | `pnpm test:tauri-e2e:l3i` | PASS |
-| L3-J | `pnpm test:tauri-e2e:gui` | PASS 12/12 ×2 |
+| L3-J | `pnpm test:tauri-e2e:gui` | PASS 12/12 x2 |
 
 ## 3. Workspace / control-plane regression
 

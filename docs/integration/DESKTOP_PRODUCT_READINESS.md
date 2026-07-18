@@ -1,4 +1,4 @@
-﻿# Desktop Product Readiness — Gate 2.2.3
+# Desktop Product Readiness - Gate 2.2.3
 
 **Date:** 2026-07-18  
 **Gate:** 2.2.3 Full WebView GUI product journey
@@ -11,7 +11,7 @@
 | Live-provider GUI | **UNPROVEN** |
 | Cross-platform GUI | **UNPROVEN** |
 | Fail-closed invoke policy | **PASS** (held under L3-J GJ-11) |
-| Fake ACP product journeys | **PASS** (GJ-01..12 ×2) |
+| Fake ACP product journeys | **PASS** (GJ-01..12 x2) |
 
 ## Product surface review
 
@@ -43,8 +43,8 @@ Integrated desktop changes were classified item-by-item (see integration report 
 
 | Claim | Status |
 |---|---|
-| Live Grok / provider GUI journeys | **UNPROVEN** — no credentials, not run |
-| macOS / Linux WebView journeys | **UNPROVEN** — Windows evidence only |
+| Live Grok / provider GUI journeys | **UNPROVEN** - no credentials, not run |
+| macOS / Linux WebView journeys | **UNPROVEN** - Windows evidence only |
 | Native OS folder picker as sole register path | Optional; path form is product-supported |
 | Production packaging / signed installers | Not this gate |
 | IDE / ALMS / plugins / marketplace | Out of scope |
@@ -52,7 +52,7 @@ Integrated desktop changes were classified item-by-item (see integration report 
 ## Residual product notes
 
 1. Fake ACP scenario selector is intentional in the current fake-default product world.  
-2. `withGlobalTauri: true` exposes public `__TAURI__` — intentional for invoke.  
+2. `withGlobalTauri: true` exposes public `__TAURI__` - intentional for invoke.  
 3. Timing-sensitive GUI hosts may need artifact-assisted re-runs.  
 
 ## Readiness statement

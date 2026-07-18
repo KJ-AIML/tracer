@@ -1,4 +1,4 @@
-﻿# Wave 2.3 Entry Criteria
+# Wave 2.3 Entry Criteria
 
 **Source gate:** 2.2.3 PASS on `integration/tracer-w2-webview-gui-journey`  
 **This document does not create or claim any Wave 2.3 tasks.**  

@@ -17,6 +17,7 @@
     "test:tauri-e2e:doctor": "node tools/tauri-e2e/doctor.mjs",
     "test:tauri-e2e:l2": "node tools/tauri-e2e/l2-smoke.mjs",
     "test:tauri-e2e:l3i": "node tools/tauri-e2e/l3i-infra.mjs",
+    "test:tauri-e2e:gui": "node tools/tauri-e2e/l3j-gui.mjs",
     "test:tauri-e2e:setup": "node tools/tauri-driver/setup.mjs",
     "validate:js": "pnpm -r run build && pnpm -r run test"
   }

@@ -201,14 +201,33 @@ a {
   padding: var(--tracer-space-3);
 }
 
-.composer textarea {
-  min-height: 72px;
-  resize: vertical;
+.composer textarea,
+.panel input[type="text"],
+.panel select,
+.layout-stack input[type="text"],
+.layout-stack select {
+  width: 100%;
+  max-width: 40rem;
+  box-sizing: border-box;
   background: var(--tracer-color-bg);
   color: var(--tracer-color-text);
   border: 1px solid var(--tracer-color-border);
   border-radius: var(--tracer-radius-sm);
   padding: var(--tracer-space-2);
+  font: inherit;
+}
+
+.composer textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.panel label,
+.layout-stack label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: var(--tracer-font-size-sm);
 }
 
 .composer__helper {

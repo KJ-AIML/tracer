@@ -1,5 +1,5 @@
 /**
- * Session workspace — VS1-H2 snapshot/command driven.
+ * Session workspace — VS1-H2 snapshot/command driven + W2.2-B GUI journey hooks.
  * Feature bodies for full editor/terminal/file explorer are out of scope.
  * Layout regions follow SESSION_SCREEN_SPEC; data from typed snapshots only.
  */
@@ -78,17 +78,24 @@ export function SessionWorkspacePlaceholder({
   const status = state.sessionStatus;
   const runtime = state.runtimeObservation;
   const auth = state.authState;
+  // Approval/cancel stay usable while a prompt invoke is outstanding (CP blocks
+  // on agent run; concurrent resolve/cancel is required for deadlock-free GUI).
   const composerOn = isComposerEnabled(status, runtime, auth) && !state.commandBusy;
   const disabledReason =
     state.commandBusy
       ? "Working…"
       : composerDisabledReason(status, runtime, auth);
-  const cancelVisible = isCancelVisible(status);
-  const cancelEnabled = isCancelEnabled(status) && !state.commandBusy;
+  const hasPendingApproval = state.pendingApprovals.length > 0;
+  const cancelVisible = isCancelVisible(status) || hasPendingApproval;
+  const cancelEnabled = isCancelEnabled(status) || hasPendingApproval;
   const pending = state.pendingApprovals[0];
+  const backend = state.demoRuntime ? "mock" : "tauri";
 
   const leave = (): void => {
-    if (status === "running" || status === "awaiting_approval") {
+    // Skip blocking confirm under L3-J / automated WebDriver (window.__TRACER_E2E__).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const e2e = Boolean((globalThis as any).__TRACER_E2E__);
+    if (!e2e && (status === "running" || status === "awaiting_approval")) {
       const ok = window.confirm(
         "Session is still active (running or awaiting approval). Leave anyway? (Runtime lifecycle stays with control plane.)",
       );
@@ -105,20 +112,32 @@ export function SessionWorkspacePlaceholder({
   };
 
   return (
-    <div className="session-workspace">
-      <header className="session-workspace__header">
+    <div
+      className="session-workspace"
+      data-testid="tracer-session-workspace"
+      data-session-id={sessionId}
+      data-session-status={status}
+      data-runtime-observation={runtime}
+      data-tracer-backend={backend}
+    >
+      <header className="session-workspace__header" data-testid="tracer-session-header">
         <div className="layout-row">
-          <Button variant="ghost" onClick={leave}>
+          <Button variant="ghost" data-testid="tracer-session-back" onClick={leave}>
             ← Sessions
           </Button>
-          <strong>Session</strong>
-          <StatusChip status={status} sublabel={state.lastErrorMessage ?? undefined} />
-          <RuntimePill observation={runtime} />
+          <strong data-testid="tracer-session-heading">Session</strong>
+          <span data-testid="tracer-session-status" data-status={status}>
+            <StatusChip status={status} sublabel={state.lastErrorMessage ?? undefined} />
+          </span>
+          <span data-testid="tracer-session-runtime" data-runtime={runtime}>
+            <RuntimePill observation={runtime} />
+          </span>
         </div>
         <div className="layout-row">
           {cancelVisible ? (
             <Button
               variant="default"
+              data-testid="tracer-session-cancel"
               disabled={!cancelEnabled}
               disabledReason={!cancelEnabled ? "Cancel unavailable" : undefined}
               onClick={() => {
@@ -130,6 +149,7 @@ export function SessionWorkspacePlaceholder({
           ) : null}
           <Button
             variant="danger"
+            data-testid="tracer-session-stop"
             disabled={status === "stopped" || state.commandBusy}
             disabledReason={
               status === "stopped" ? "Already stopped" : state.commandBusy ? "Working…" : undefined
@@ -142,6 +162,7 @@ export function SessionWorkspacePlaceholder({
           </Button>
           <Button
             variant="ghost"
+            data-testid="tracer-session-refresh"
             onClick={() => {
               void journey.refreshSnapshot().then(() => journey.loadEvents(sessionId));
             }}
@@ -151,39 +172,53 @@ export function SessionWorkspacePlaceholder({
         </div>
       </header>
 
-      <div className="layout-stack" aria-label="Session banners">
+      <div
+        className="layout-stack"
+        aria-label="Session banners"
+        data-testid="tracer-session-banners"
+      >
         {auth === "unauthenticated" || runtime === "sign_in_required" ? (
-          <Banner severity="warning" title="Sign in required to use this agent runtime" live="assertive">
-            <p>Choose an authentication method, then continue. Composer stays disabled until ready.</p>
-          </Banner>
+          <div data-testid="tracer-banner-auth-required">
+            <Banner severity="warning" title="Sign in required to use this agent runtime" live="assertive">
+              <p>Choose an authentication method, then continue. Composer stays disabled until ready.</p>
+            </Banner>
+          </div>
         ) : null}
         {auth === "failed" ? (
-          <Banner severity="error" title="Sign-in failed" live="assertive">
-            <p>{state.lastErrorMessage ?? "Authentication failed."}</p>
-          </Banner>
+          <div data-testid="tracer-banner-auth-failed">
+            <Banner severity="error" title="Sign-in failed" live="assertive">
+              <p>{state.lastErrorMessage ?? "Authentication failed."}</p>
+            </Banner>
+          </div>
         ) : null}
-        {status === "disconnected" ? (
-          <Banner severity="error" title="Runtime disconnected" live="assertive">
-            <p>
-              The agent process exited while this session was active. Prompting is disabled. Never show
-              Running after exit.
-            </p>
-          </Banner>
+        {status === "disconnected" || runtime === "crashed" ? (
+          <div data-testid="tracer-banner-runtime-disconnected">
+            <Banner severity="error" title="Runtime disconnected" live="assertive">
+              <p>
+                The agent process exited while this session was active. Prompting is disabled. Never
+                show Running after exit.
+              </p>
+            </Banner>
+          </div>
         ) : null}
-        {state.lastErrorMessage && status === "failed" ? (
-          <Banner severity="error" title="Session failed" live="assertive">
-            <p>{state.lastErrorMessage}</p>
-          </Banner>
+        {state.lastErrorMessage && (status === "failed" || state.lastFailureKind) ? (
+          <div data-testid="tracer-banner-session-error">
+            <Banner severity="error" title="Session command error" live="assertive">
+              <p>{state.lastErrorMessage}</p>
+            </Banner>
+          </div>
         ) : null}
         {!state.heli.available ? (
-          <Banner severity="info" title="Heli unavailable" live="polite">
-            <p>{state.heli.summary} — non-fatal; session continues.</p>
-          </Banner>
+          <div data-testid="tracer-banner-heli-unavailable">
+            <Banner severity="info" title="Heli unavailable" live="polite">
+              <p>{state.heli.summary} — non-fatal; session continues.</p>
+            </Banner>
+          </div>
         ) : null}
       </div>
 
       <div className="session-workspace__split">
-        <section className="timeline-pane" aria-label="Timeline">
+        <section className="timeline-pane" aria-label="Timeline" data-testid="tracer-timeline">
           <h2 className="panel__title">Timeline</h2>
           {status === "ready" && state.events.length === 0 ? (
             <PresentationContainer
@@ -192,55 +227,63 @@ export function SessionWorkspacePlaceholder({
               body="Send a prompt to begin. Events arrive as typed normalized envelopes."
             />
           ) : null}
-          {presentationForStatus(status)}
-          {status === "awaiting_approval" && pending ? (
-            <PresentationContainer
-              kind="approval"
-              sessionStatus={status}
-              actions={
-                <>
-                  <Button
-                    variant="primary"
-                    disabled={state.commandBusy}
-                    onClick={() => {
-                      void journey.resolveApproval(sessionId, pending.approvalId, "allow");
-                    }}
-                  >
-                    Allow
-                  </Button>
-                  <Button
-                    variant="danger"
-                    disabled={state.commandBusy}
-                    onClick={() => {
-                      void journey.resolveApproval(sessionId, pending.approvalId, "deny");
-                    }}
-                  >
-                    Deny
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={state.commandBusy}
-                    onClick={() => {
-                      void journey.resolveApproval(sessionId, pending.approvalId, "cancel");
-                    }}
-                  >
-                    Cancel request
-                  </Button>
-                </>
-              }
-            >
-              <p className="list__meta">
-                <strong>{pending.action}</strong> — {pending.description}
-              </p>
-              <p className="list__meta">
-                Risk: {pending.risk} — review carefully. Fail closed: never auto-allow.
-              </p>
-            </PresentationContainer>
+          <div data-testid="tracer-session-presentation">{presentationForStatus(status)}</div>
+          {pending ? (
+            <div data-testid="tracer-approval-card" data-approval-id={pending.approvalId}>
+              <PresentationContainer
+                kind="approval"
+                sessionStatus={status === "awaiting_approval" ? status : "awaiting_approval"}
+                actions={
+                  <>
+                    <Button
+                      variant="primary"
+                      data-testid="tracer-approval-allow"
+                      onClick={() => {
+                        void journey.resolveApproval(sessionId, pending.approvalId, "allow");
+                      }}
+                    >
+                      Allow
+                    </Button>
+                    <Button
+                      variant="danger"
+                      data-testid="tracer-approval-deny"
+                      onClick={() => {
+                        void journey.resolveApproval(sessionId, pending.approvalId, "deny");
+                      }}
+                    >
+                      Deny
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      data-testid="tracer-approval-cancel-request"
+                      onClick={() => {
+                        void journey.resolveApproval(sessionId, pending.approvalId, "cancel");
+                      }}
+                    >
+                      Cancel request
+                    </Button>
+                  </>
+                }
+              >
+                <p className="list__meta">
+                  <strong>{pending.action}</strong> — {pending.description}
+                </p>
+                <p className="list__meta">
+                  Risk: {pending.risk} — review carefully. Fail closed: never auto-allow.
+                </p>
+              </PresentationContainer>
+            </div>
           ) : null}
           {state.events.length > 0 ? (
-            <ul className="list" aria-label="Normalized events">
+            <ul className="list" aria-label="Normalized events" data-testid="tracer-event-list">
               {state.events.map((e) => (
-                <li key={e.eventId} className="list__item">
+                <li
+                  key={e.eventId}
+                  className="list__item"
+                  data-testid={`tracer-event-${e.sequence}`}
+                  data-event-type={e.type}
+                  data-event-sequence={String(e.sequence)}
+                >
                   <div>
                     <div>
                       <code>{e.type}</code>
@@ -258,13 +301,14 @@ export function SessionWorkspacePlaceholder({
           ) : null}
         </section>
 
-        <aside className="side-pane" aria-label="Side pane">
+        <aside className="side-pane" aria-label="Side pane" data-testid="tracer-side-pane">
           <div className="side-pane__tabs" role="tablist" aria-label="Session side tabs">
             {(["plan", "approvals", "changes", "runtime"] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
                 role="tab"
+                data-testid={`tracer-side-tab-${tab}`}
                 aria-selected={state.sideTab === tab}
                 onClick={() => dispatch({ type: "setSideTab", tab })}
               >
@@ -278,12 +322,12 @@ export function SessionWorkspacePlaceholder({
               </Button>
             ))}
           </div>
-          <div role="tabpanel" className="list__meta">
+          <div role="tabpanel" className="list__meta" data-testid="tracer-side-tab-panel">
             {state.sideTab === "plan" && (
               <p>No plan yet. Plans appear when the agent shares one.</p>
             )}
             {state.sideTab === "approvals" && (
-              <div>
+              <div data-testid="tracer-approvals-panel">
                 {state.pendingApprovals.length === 0 ? (
                   <p>No pending approvals. Fail closed: never auto-allow.</p>
                 ) : (
@@ -313,11 +357,12 @@ export function SessionWorkspacePlaceholder({
         </aside>
       </div>
 
-      <div className="composer">
+      <div className="composer" data-testid="tracer-composer">
         <label htmlFor="prompt">
           Prompt
           <textarea
             id="prompt"
+            data-testid="tracer-prompt-input"
             value={state.composerText}
             disabled={!composerOn}
             onChange={(e) => dispatch({ type: "setComposerText", text: e.target.value })}
@@ -327,6 +372,7 @@ export function SessionWorkspacePlaceholder({
         <div className="layout-row">
           <Button
             variant="primary"
+            data-testid="tracer-prompt-send"
             disabled={!composerOn || !state.composerText.trim()}
             disabledReason={disabledReason ?? undefined}
             onClick={() => {
@@ -335,21 +381,27 @@ export function SessionWorkspacePlaceholder({
           >
             Send
           </Button>
-          {disabledReason ? <p className="composer__helper">{disabledReason}</p> : null}
+          {disabledReason ? (
+            <p className="composer__helper" data-testid="tracer-composer-helper">
+              {disabledReason}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      <footer className="session-footer">
-        <span>
-          {state.demoRuntime ? "mock" : "tauri"} · session {sessionId.slice(0, 8)}…
+      <footer className="session-footer" data-testid="tracer-session-footer">
+        <span data-testid="tracer-session-footer-backend">
+          {backend} · session {sessionId.slice(0, 8)}…
         </span>
-        <span>seq {state.snapshot.latestSequence}</span>
-        <span>auth: {state.authState}</span>
-        <span>last error: {state.lastErrorMessage ?? "—"}</span>
+        <span data-testid="tracer-session-footer-seq">seq {state.snapshot.latestSequence}</span>
+        <span data-testid="tracer-session-footer-auth">auth: {state.authState}</span>
+        <span data-testid="tracer-session-footer-error">
+          last error: {state.lastErrorMessage ?? "—"}
+        </span>
       </footer>
 
       {state.demoRuntime ? (
-        <section className="panel" aria-label="Mock scenario controls">
+        <section className="panel" aria-label="Mock scenario controls" data-testid="tracer-mock-controls">
           <h2 className="panel__title">Mock scenarios (browser / tests only)</h2>
           <div className="mock-controls">
             {(
@@ -364,7 +416,11 @@ export function SessionWorkspacePlaceholder({
                 ["heli_unavailable", "Heli unavailable"],
               ] as const
             ).map(([scenario, label]) => (
-              <Button key={scenario} onClick={() => void runScenario(scenario)}>
+              <Button
+                key={scenario}
+                data-testid={`tracer-mock-scenario-${scenario}`}
+                onClick={() => void runScenario(scenario)}
+              >
                 {label}
               </Button>
             ))}

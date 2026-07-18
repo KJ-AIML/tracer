@@ -917,9 +917,10 @@ export function capabilityMatrix(env, issues) {
         : "blocked until tauri-driver + compatible native WebDriver + build",
     },
     "L3-J": {
-      attemptable: false,
-      claim:
-        "NOT_STARTED — owned by future W2.2-B product journey; not claimed by W2.2-T",
+      attemptable: l3i,
+      claim: l3i
+        ? "attemptable — pnpm test:tauri-e2e:gui (W2.2-B product journeys GJ-01..12)"
+        : "blocked until same driver/build readiness as L3-I; then pnpm test:tauri-e2e:gui",
     },
     blockers: [...codes],
   };

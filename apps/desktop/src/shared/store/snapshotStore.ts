@@ -381,6 +381,28 @@ export class SnapshotJourney {
     return result.sessions;
   }
 
+  async registerProject(rootPath: string, name?: string): Promise<ProjectSummary> {
+    this.dispatch({ type: "setCommandBusy", busy: true });
+    try {
+      const result = await invokeTracer<{ project: ProjectSummary }>(
+        "tracer_project_register",
+        { rootPath, name },
+      );
+      await this.loadProjects();
+      this.dispatch({
+        type: "navigate",
+        route: { name: "project", projectId: result.project.projectId },
+      });
+      await this.loadSessions(result.project.projectId);
+      return result.project;
+    } catch (err) {
+      this.applyCommandFailure(err);
+      throw err;
+    } finally {
+      this.dispatch({ type: "setCommandBusy", busy: false });
+    }
+  }
+
   async createSession(
     projectId: string,
     title?: string,
@@ -399,6 +421,14 @@ export class SnapshotJourney {
         "tracer_session_create",
         { projectId, title, ...(runtime ? { runtime } : {}) },
       );
+      // Multi-session presentation focus (W2-A / W2-C contract).
+      try {
+        await invokeTracer("tracer_presentation_focus", {
+          sessionId: result.session.sessionId,
+        });
+      } catch {
+        // Focus is best-effort if hub not yet aware; snapshot refresh below still runs.
+      }
       await this.refreshSnapshot();
       await this.loadSessions(projectId);
       this.dispatch({
@@ -426,6 +456,12 @@ export class SnapshotJourney {
         type: "navigate",
         route: { name: "session", projectId, sessionId },
       });
+      // Switch presentation focus without stopping other live sessions.
+      try {
+        await invokeTracer("tracer_presentation_focus", { sessionId });
+      } catch {
+        // Non-fatal if session not live; history still loads from storage.
+      }
       // Reopen persisted history via events_list + snapshot.
       await this.refreshSnapshot();
       await this.loadEvents(sessionId);
@@ -449,19 +485,72 @@ export class SnapshotJourney {
     return result.events;
   }
 
+  /**
+   * Submit prompt without holding a global UI lock across the full control-plane
+   * RPC. CP `submit_prompt` blocks until the agent run returns, while ingestion
+   * continues — approvals and cancel must remain invokable concurrently (GUI).
+   */
   async submitPrompt(sessionId: string, text: string): Promise<void> {
-    this.dispatch({ type: "setCommandBusy", busy: true });
-    try {
-      await invokeTracer("tracer_session_submit_prompt", { sessionId, text });
-      this.dispatch({ type: "setComposerText", text: "" });
-      await this.refreshSnapshot();
-      await this.loadEvents(sessionId);
-    } catch (err) {
-      this.applyCommandFailure(err);
+    this.dispatch({ type: "setComposerText", text: "" });
+    let settled = false;
+    /** Captured for rethrow after soft-poll (unit tests + fail-closed UI). */
+    let settleError: unknown = null;
+    // Swallow rejections into settleError so callers get a single controlled throw
+    // (avoids vitest unhandled-rejection races with fire-and-forget prompt RPC).
+    const promptPromise = invokeTracer("tracer_session_submit_prompt", {
+      sessionId,
+      text,
+    })
+      .then(async () => {
+        await this.refreshSnapshot().catch(() => undefined);
+        await this.loadEvents(sessionId).catch(() => undefined);
+      })
+      .catch(async (err) => {
+        settleError = err;
+        this.applyCommandFailure(err);
+        await this.refreshSnapshot().catch(() => undefined);
+        await this.loadEvents(sessionId).catch(() => undefined);
+      })
+      .finally(() => {
+        settled = true;
+      });
+
+    // Soft-poll presentation/events so timeline streams and approval cards appear
+    // while the Tauri invoke is still outstanding. Never treat "ready" as done
+    // while the prompt RPC is still open (approval scenarios stay ready until
+    // status projection catches up).
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline && !settled) {
       await this.refreshSnapshot().catch(() => undefined);
-      throw err;
-    } finally {
-      this.dispatch({ type: "setCommandBusy", busy: false });
+      await this.loadEvents(sessionId).catch(() => undefined);
+      const st = this.getState().sessionStatus;
+      const pending = this.getState().pendingApprovals.length;
+      if (st === "awaiting_approval" || pending > 0) {
+        // Leave UI interactive; continue background settle of the prompt RPC.
+        void promptPromise;
+        // Keep a light background poll so status/events update after allow/deny.
+        void (async () => {
+          while (!settled) {
+            await new Promise((r) => setTimeout(r, 400));
+            await this.refreshSnapshot().catch(() => undefined);
+            await this.loadEvents(sessionId).catch(() => undefined);
+          }
+        })();
+        return;
+      }
+      if (
+        st === "completed" ||
+        st === "failed" ||
+        st === "stopped" ||
+        st === "disconnected"
+      ) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    await promptPromise;
+    if (settleError) {
+      throw settleError;
     }
   }
 

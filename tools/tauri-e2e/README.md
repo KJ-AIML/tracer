@@ -2,7 +2,7 @@
 
 **Task:** `tracer-w2-tauri-e2e-infrastructure`  
 **Classification:** infrastructure + packaged-app smoke + WebView **driver infrastructure**  
-**Not claimed:** L3-J full GUI product journey (future W2.2-B)
+**L3-J:** product journeys GJ-01…GJ-12 via `pnpm test:tauri-e2e:gui` (W2.2-B)
 
 ## Levels (do not collapse)
 
@@ -12,7 +12,7 @@
 | **L1** | Backend command-boundary (plane_* == Tauri handlers) | `node tools/tauri-e2e/run.mjs --boundary-only` |
 | **L2** | Built application launch smoke | `node tools/tauri-e2e/l2-smoke.mjs` |
 | **L3-I** | WebView driver infrastructure interaction | `node tools/tauri-e2e/l3i-infra.mjs` |
-| **L3-J** | Full GUI product journey | **DEFERRED** — do not claim |
+| **L3-J** | Full GUI product journey | `node tools/tauri-e2e/l3j-gui.mjs` / `pnpm test:tauri-e2e:gui` |
 
 ## Doctor
 

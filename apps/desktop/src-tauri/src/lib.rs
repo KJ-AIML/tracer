@@ -19,6 +19,9 @@ pub use commands::REGISTERED_COMMANDS;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // L3-J: load temp DB / fake ACP / heli probe from --tracer-e2e-env=file when present.
+    control_plane::apply_e2e_env_from_cli();
+
     // Tokio runtime for async control plane open before tauri loop.
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let db_path = control_plane::resolve_database_path_for_e2e(None);
@@ -33,6 +36,9 @@ pub fn run() {
                     .expect("in-memory control plane")
             })
         });
+
+    // Test-only readiness marker for L3-J harness (env TRACER_E2E_READY_MARKER).
+    control_plane::write_e2e_ready_marker();
 
     // Keep runtime alive for control plane background storage.
     std::mem::forget(rt);

@@ -28,9 +28,17 @@ function Router(): ReactElement {
     void journey.bootstrapLoad();
   }, [journey]);
 
+  const ready =
+    state.loadPhase === "ready" || state.loadPhase === "failed";
+  const backend = state.demoRuntime ? "mock" : "tauri";
+
   let page: ReactElement;
   if (state.loadPhase === "loading" || state.loadPhase === "idle") {
-    page = <LoadingState label="Loading presentation snapshot…" />;
+    page = (
+      <div data-testid="tracer-loading" aria-busy="true">
+        <LoadingState label="Loading presentation snapshot…" />
+      </div>
+    );
   } else {
     switch (state.route.name) {
       case "projects":
@@ -69,9 +77,36 @@ function Router(): ReactElement {
   }
 
   return (
-    <AppShell state={state} dispatch={dispatch}>
-      {page}
-    </AppShell>
+    <div
+      id="tracer-app-root"
+      data-testid="tracer-app-root"
+      data-tracer-ready={ready ? "true" : "false"}
+      data-tracer-backend={backend}
+      data-tracer-load-phase={state.loadPhase}
+      data-tracer-route={state.route.name}
+    >
+      {/* Stable readiness marker for L3-J WebDriver waits (DOM + a11y). */}
+      {ready ? (
+        <div
+          data-testid="tracer-app-ready"
+          role="status"
+          aria-live="polite"
+          aria-label="Tracer application ready"
+          style={{
+            position: "absolute",
+            width: 1,
+            height: 1,
+            overflow: "hidden",
+            clip: "rect(0 0 0 0)",
+          }}
+        >
+          ready:{backend}
+        </div>
+      ) : null}
+      <AppShell state={state} dispatch={dispatch}>
+        {page}
+      </AppShell>
+    </div>
   );
 }
 

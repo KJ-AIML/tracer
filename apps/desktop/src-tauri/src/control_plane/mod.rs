@@ -95,3 +95,92 @@ pub fn resolve_database_path_for_e2e(explicit: Option<PathBuf>) -> Option<PathBu
             .map(PathBuf::from)
     })
 }
+
+/// Write a test-only readiness marker file when `TRACER_E2E_READY_MARKER` is set.
+/// Used by L3-J harness process-level readiness (optional; DOM marker is primary).
+pub fn write_e2e_ready_marker() {
+    let Ok(path) = std::env::var("TRACER_E2E_READY_MARKER") else {
+        return;
+    };
+    let path = path.trim();
+    if path.is_empty() {
+        return;
+    }
+    let pb = PathBuf::from(path);
+    if let Some(parent) = pb.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let body = format!(
+        "ready=1\npid={}\ndatabase={}\nfakeJs={}\n",
+        std::process::id(),
+        std::env::var("TRACER_DATABASE_PATH").unwrap_or_default(),
+        std::env::var("TRACER_FAKE_ACP_JS").unwrap_or_default(),
+    );
+    let _ = std::fs::write(&pb, body);
+}
+
+/// Load test-only environment from a dotenv-style file before control-plane open.
+///
+/// Why: some WebDriver/`tauri-driver` hosts do not reliably forward `tauri:options.env`
+/// into the child process. L3-J therefore passes:
+///
+/// ```text
+/// tracer-desktop.exe --tracer-e2e-env=<path>
+/// ```
+///
+/// File format: one `KEY=VALUE` per line (`#` comments, blank lines ignored).
+/// Only applies when the path exists. Never required for normal product use.
+pub fn apply_e2e_env_from_cli() {
+    let mut path: Option<PathBuf> = None;
+    if let Ok(p) = std::env::var("TRACER_E2E_ENV_FILE") {
+        if !p.trim().is_empty() {
+            path = Some(PathBuf::from(p.trim()));
+        }
+    }
+    if path.is_none() {
+        for arg in std::env::args().skip(1) {
+            if let Some(rest) = arg.strip_prefix("--tracer-e2e-env=") {
+                path = Some(PathBuf::from(rest));
+                break;
+            }
+            if arg == "--tracer-e2e-env" {
+                // next arg form not required; support only = form for harness simplicity
+                continue;
+            }
+        }
+    }
+    let Some(path) = path else {
+        return;
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        eprintln!("TRACER E2E env file unreadable: {}", path.display());
+        return;
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
+        let k = k.trim();
+        let v = v.trim().trim_matches('"');
+        if k.is_empty() {
+            continue;
+        }
+        // Only set harness-owned vars (do not clobber arbitrary process env from file).
+        const ALLOW: &[&str] = &[
+            "TRACER_DATABASE_PATH",
+            "TRACER_FAKE_ACP_JS",
+            "TRACER_HELI_PROBE_PATH",
+            "TRACER_NODE_BIN",
+            "TRACER_E2E_READY_MARKER",
+            "TRACER_E2E_PROFILE",
+            "TRACER_E2E_ENV_FILE",
+        ];
+        if ALLOW.contains(&k) {
+            std::env::set_var(k, v);
+        }
+    }
+}

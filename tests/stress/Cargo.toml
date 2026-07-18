@@ -10,6 +10,10 @@ license.workspace = true
 name = "stress_repeated_sessions"
 path = "src/stress_repeated_sessions.rs"
 
+[[test]]
+name = "stress_multi_session"
+path = "src/stress_multi_session.rs"
+
 [dependencies]
 tracer-control-plane = { workspace = true }
 tracer-domain = { workspace = true }

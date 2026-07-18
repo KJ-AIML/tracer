@@ -160,14 +160,13 @@ Follow-up path is documented in architecture §3 / tools README. **Do not treat 
 
 ## Commit SHAs
 
-*(filled after focused commits)*
-
 | Commit | Contents |
 |---|---|
-| _(pending)_ | desktop Tauri glue + plane handlers + E2E env |
-| _(pending)_ | boundary journey + invoke policy tests |
-| _(pending)_ | tools/tauri-e2e harness |
-| _(pending)_ | docs/modules/w2-b deliverables |
+| `639db16` | desktop Tauri glue + plane handlers + E2E env + fail-closed invoke |
+| `fe60017` | boundary journey + invoke policy tests |
+| `9976f9b` | tools/tauri-e2e harness + e2e entry README |
+| `87f8629` | docs/modules/w2-b architecture, matrix, completion |
+| head | this report SHA table (follow-up amend/docs pin) |
 
 ## Lease
 

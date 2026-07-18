@@ -7,7 +7,7 @@
  *   - L2 packaged application launch smoke
  *   - L3-I WebView driver infrastructure interaction
  *
- * L3-J full GUI product journey is DEFERRED (future W2.2-B) — never claimed.
+ * L3-J full GUI product journey: dedicated entry `l3j-gui.mjs` / `pnpm test:tauri-e2e:gui`.
  *
  * Standard automated class (L0+L1):
  *   network: no, credentials: no, live Grok: no, provider: no
@@ -36,9 +36,10 @@ const guiProbe = args.has("--gui-probe");
 const doctorOnly = args.has("--doctor");
 const l2Only = args.has("--l2");
 const l3iOnly = args.has("--l3i");
+const l3jOnly = args.has("--l3j") || args.has("--gui");
 const allLevels = args.has("--all");
-const skipPolicy = boundaryOnly || l2Only || l3iOnly || doctorOnly;
-const skipBoundary = policyOnly || l2Only || l3iOnly || doctorOnly;
+const skipPolicy = boundaryOnly || l2Only || l3iOnly || l3jOnly || doctorOnly;
+const skipBoundary = policyOnly || l2Only || l3iOnly || l3jOnly || doctorOnly;
 
 function log(section, msg) {
   console.log(`[tauri-e2e:${section}] ${msg}`);
@@ -153,14 +154,14 @@ function runGuiProbe() {
       L1: "desktop boundary — executable via --boundary-only / full suite",
       L2: "packaged app smoke — node tools/tauri-e2e/l2-smoke.mjs",
       "L3-I": "WebView driver infra — node tools/tauri-e2e/l3i-infra.mjs",
-      "L3-J": "full GUI product journey — DEFERRED (future W2.2-B; not claimed)",
+      "L3-J": "full GUI product journey — node tools/tauri-e2e/l3j-gui.mjs / pnpm test:tauri-e2e:gui",
     },
-    fullGuiE2e: false,
-    fullGuiProductJourneyL3J: false,
+    fullGuiE2e: true,
+    fullGuiProductJourneyL3J: true,
     reason:
-      "W2.2-A delivers infrastructure + L2 smoke + L3-I driver interaction. " +
-      "L3-J product journey (session/prompt/approval through DOM) is deferred. " +
-      "Run doctor for host readiness: node tools/tauri-e2e/doctor.mjs",
+      "W2.2-B owns L3-J product journeys (GJ-01..12) via real WebDriver + Tauri. " +
+      "L0–L3-I remain executable. L3-J is independent and not part of pnpm -r test. " +
+      "Run: pnpm test:tauri-e2e:gui  or  pnpm test:tauri-e2e:gui -- --journey GJ-03",
     preferredPathDocumented: true,
     blockers,
     envHooks: [
@@ -172,12 +173,15 @@ function runGuiProbe() {
       "TRACER_E2E_PROFILE",
       "TRACER_E2E_APP_BINARY",
       "TRACER_NATIVE_DRIVER",
+      "TRACER_E2E_READY_MARKER",
     ],
     commands: {
       doctor: "node tools/tauri-e2e/doctor.mjs",
       l0l1: "node tools/tauri-e2e/run.mjs",
       l2: "node tools/tauri-e2e/l2-smoke.mjs",
       l3i: "node tools/tauri-e2e/l3i-infra.mjs",
+      l3j: "node tools/tauri-e2e/l3j-gui.mjs",
+      gui: "pnpm test:tauri-e2e:gui",
       all: "node tools/tauri-e2e/run.mjs --all",
     },
   };
@@ -207,7 +211,15 @@ function main() {
       return;
     }
 
-    if (!l2Only && !l3iOnly) {
+    if (l3jOnly) {
+      runNodeScript(
+        "l3j-gui.mjs",
+        process.argv.slice(2).filter((a) => a !== "--l3j" && a !== "--gui"),
+      );
+      return;
+    }
+
+    if (!l2Only && !l3iOnly && !l3jOnly) {
       assertFakeRuntime();
     }
 
@@ -249,12 +261,12 @@ function main() {
   }
 
   console.log(
-    "=== Tauri E2E harness: L0/L1 PASS (desktop-boundary); L2/L3-I via dedicated commands ===",
+    "=== Tauri E2E harness: L0/L1 PASS (desktop-boundary); L2/L3-I/L3-J via dedicated commands ===",
   );
   console.log(
     `Honest levels: ${Level.L0_INVOKE_POLICY}+${Level.L1_BACKEND_BOUNDARY} executable; ` +
       `${Level.L2_PACKAGED_SMOKE}/${Level.L3I_WEBVIEW_INFRA} platform-gated; ` +
-      `${Level.L3J_PRODUCT_JOURNEY} DEFERRED`,
+      `${Level.L3J_PRODUCT_JOURNEY} via pnpm test:tauri-e2e:gui`,
   );
   void ResultClass;
 }

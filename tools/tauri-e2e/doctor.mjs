@@ -154,8 +154,11 @@ function printHuman(report) {
     );
   }
   console.log("");
+  const l3j = capabilities["L3-J"];
   console.log(
-    "L3-J full GUI product journey: NOT_STARTED (not claimed by W2.2-T tooling)",
+    l3j?.attemptable
+      ? "L3-J full GUI product journey: attemptable via pnpm test:tauri-e2e:gui (W2.2-B)"
+      : "L3-J full GUI product journey: blocked until drivers+build ready (then pnpm test:tauri-e2e:gui)",
   );
 }
 

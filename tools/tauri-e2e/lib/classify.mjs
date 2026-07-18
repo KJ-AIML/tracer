@@ -20,8 +20,27 @@ export const ResultClass = Object.freeze({
   PARTIAL: "PARTIAL",
   BLOCKED_BY_TOOLING: "BLOCKED_BY_TOOLING",
   BLOCKED_BY_WEBVIEW: "BLOCKED_BY_WEBVIEW",
+  BLOCKED_BY_PRODUCT_GAP: "BLOCKED_BY_PRODUCT_GAP",
+  BLOCKED_BY_FIXTURE: "BLOCKED_BY_FIXTURE",
   UNSUPPORTED_PLATFORM: "UNSUPPORTED_PLATFORM",
   FAIL: "FAIL",
+  NOT_STARTED: "NOT_STARTED",
+});
+
+/** L3-J product journey ids. */
+export const JourneyId = Object.freeze({
+  GJ_01: "GJ-01",
+  GJ_02: "GJ-02",
+  GJ_03: "GJ-03",
+  GJ_04: "GJ-04",
+  GJ_05: "GJ-05",
+  GJ_06: "GJ-06",
+  GJ_07: "GJ-07",
+  GJ_08: "GJ-08",
+  GJ_09: "GJ-09",
+  GJ_10: "GJ-10",
+  GJ_11: "GJ-11",
+  GJ_12: "GJ-12",
 });
 
 /** Precise failure / issue codes (doctor + runners). */
@@ -138,7 +157,22 @@ export function suiteResultFromStages(stages) {
     (s) => !(s.status === "skip" && s.classification === ResultClass.PASS),
   );
   const statuses = material.map((s) => s.status);
-  if (statuses.some((s) => s === "fail")) return ResultClass.FAIL;
+  const classes = material.map((s) => s.classification).filter(Boolean);
+  if (statuses.some((s) => s === "fail") || classes.includes(ResultClass.FAIL)) {
+    return ResultClass.FAIL;
+  }
+  if (
+    statuses.some((s) => s === "blocked_product_gap") ||
+    classes.includes(ResultClass.BLOCKED_BY_PRODUCT_GAP)
+  ) {
+    return ResultClass.BLOCKED_BY_PRODUCT_GAP;
+  }
+  if (
+    statuses.some((s) => s === "blocked_fixture") ||
+    classes.includes(ResultClass.BLOCKED_BY_FIXTURE)
+  ) {
+    return ResultClass.BLOCKED_BY_FIXTURE;
+  }
   if (statuses.some((s) => s === "blocked_webview")) {
     return ResultClass.BLOCKED_BY_WEBVIEW;
   }
@@ -153,6 +187,45 @@ export function suiteResultFromStages(stages) {
     return anyPass ? ResultClass.PARTIAL : ResultClass.BLOCKED_BY_TOOLING;
   }
   return ResultClass.PASS;
+}
+
+/**
+ * Aggregate L3-J journey classifications into an overall L3-J decision.
+ * @param {{ id: string, result: string }[]} journeys
+ */
+export function suiteResultFromJourneys(journeys) {
+  if (!journeys.length) return ResultClass.NOT_STARTED;
+  const results = journeys.map((j) => j.result);
+  if (results.every((r) => r === ResultClass.PASS)) return ResultClass.PASS;
+  if (results.some((r) => r === ResultClass.FAIL)) {
+    // Fail only if any hard FAIL and no tooling/product-gap exclusive set
+    const nonPass = results.filter((r) => r !== ResultClass.PASS);
+    if (nonPass.every((r) => r === ResultClass.FAIL)) return ResultClass.FAIL;
+  }
+  if (results.some((r) => r === ResultClass.BLOCKED_BY_TOOLING)) {
+    if (results.every((r) => r === ResultClass.BLOCKED_BY_TOOLING || r === ResultClass.PASS)) {
+      return results.some((r) => r === ResultClass.PASS)
+        ? ResultClass.PARTIAL
+        : ResultClass.BLOCKED_BY_TOOLING;
+    }
+  }
+  if (results.some((r) => r === ResultClass.BLOCKED_BY_PRODUCT_GAP)) {
+    return ResultClass.BLOCKED_BY_PRODUCT_GAP;
+  }
+  if (results.some((r) => r === ResultClass.BLOCKED_BY_FIXTURE)) {
+    return ResultClass.BLOCKED_BY_FIXTURE;
+  }
+  if (results.some((r) => r === ResultClass.BLOCKED_BY_WEBVIEW)) {
+    return ResultClass.BLOCKED_BY_WEBVIEW;
+  }
+  if (results.some((r) => r === ResultClass.UNSUPPORTED_PLATFORM)) {
+    return ResultClass.UNSUPPORTED_PLATFORM;
+  }
+  if (results.some((r) => r === ResultClass.FAIL)) return ResultClass.FAIL;
+  if (results.some((r) => r === ResultClass.PARTIAL || r === ResultClass.PASS)) {
+    return ResultClass.PARTIAL;
+  }
+  return ResultClass.FAIL;
 }
 
 export function isSuccessClass(c) {

@@ -34,6 +34,7 @@ logs/
 tmp/
 temp/
 *.tmp
+artifacts/tauri-e2e/
 
 # === OS / editors ===
 .DS_Store

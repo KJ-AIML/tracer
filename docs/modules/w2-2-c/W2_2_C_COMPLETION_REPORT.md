@@ -4,7 +4,15 @@
 **Work item:** W2.2-C  
 **Branch:** `agent/tracer-w2-drain-lifecycle`  
 **Session:** `heli-ses-ed6c1260-f8bd-4219-9451-a385c4f34571`  
-**Date:** 2026-07-18
+**Date:** 2026-07-18  
+
+### Commit SHAs
+
+| Commit | Summary |
+|---|---|
+| `0589b27` | feat: harden drain lifecycle + integration suite |
+| `469e01c` | test: stress drain lifecycle |
+| `d8d7a7c` | docs: model, matrix, completion, results |
 
 ## Summary
 

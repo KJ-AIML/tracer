@@ -19,6 +19,7 @@ pub struct PlaneState {
 pub const REGISTERED_COMMANDS: &[&str] = &[
     "tracer_app_info",
     "tracer_presentation_snapshot",
+    "tracer_presentation_focus",
     "tracer_heli_status",
     "tracer_project_list",
     "tracer_project_register",
@@ -67,6 +68,26 @@ pub fn tracer_presentation_snapshot(state: State<'_, PlaneState>) -> Result<Valu
 
 pub fn plane_presentation_snapshot(plane: &ControlPlane) -> Result<Value, String> {
     serde_json::to_value(plane.snapshot()).map_err(|e| e.to_string())
+}
+
+/// Switch presentation focus without stopping other live sessions (W2-A hub + W2-C multi-session).
+#[tauri::command]
+pub async fn tracer_presentation_focus(
+    state: State<'_, PlaneState>,
+    session_id: String,
+) -> Result<Value, String> {
+    plane_presentation_focus(&state.plane, session_id).await
+}
+
+pub async fn plane_presentation_focus(
+    plane: &ControlPlane,
+    session_id: String,
+) -> Result<Value, String> {
+    let snap = plane
+        .presentation_focus(&session_id)
+        .await
+        .map_err(map_err)?;
+    serde_json::to_value(snap).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

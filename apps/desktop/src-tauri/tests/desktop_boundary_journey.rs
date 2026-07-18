@@ -17,11 +17,11 @@ use tempfile::tempdir;
 use tracer_control_plane::RuntimeCreateOptions;
 use tracer_desktop_lib::commands::{
     plane_app_info, plane_approval_list_pending, plane_approval_resolve, plane_events_list,
-    plane_heli_status, plane_presentation_snapshot, plane_project_list, plane_project_register,
-    plane_runtime_status, plane_session_create, plane_session_get, plane_session_list,
-    plane_session_stop, plane_session_submit_prompt, plane_session_cancel, ApprovalResolveArgs,
-    EventsListArgs, ProjectRegisterArgs, SessionCreateArgs, SessionListArgs, StopArgs,
-    SubmitPromptArgs, CancelArgs, REGISTERED_COMMANDS,
+    plane_heli_status, plane_presentation_focus, plane_presentation_snapshot, plane_project_list,
+    plane_project_register, plane_runtime_status, plane_session_create, plane_session_get,
+    plane_session_list, plane_session_stop, plane_session_submit_prompt, plane_session_cancel,
+    ApprovalResolveArgs, EventsListArgs, ProjectRegisterArgs, SessionCreateArgs, SessionListArgs,
+    StopArgs, SubmitPromptArgs, CancelArgs, REGISTERED_COMMANDS,
 };
 use tracer_desktop_lib::control_plane::{build_control_plane, discover_fake_js};
 use tracer_desktop_lib::REGISTERED_COMMANDS as LIB_REGISTERED;
@@ -178,6 +178,7 @@ fn walk_reject_raw_acp_keys(value: &serde_json::Value) {
 async fn a1_registered_commands_stable() {
     assert_eq!(REGISTERED_COMMANDS, LIB_REGISTERED);
     assert!(REGISTERED_COMMANDS.contains(&"tracer_presentation_snapshot"));
+    assert!(REGISTERED_COMMANDS.contains(&"tracer_presentation_focus"));
     assert!(REGISTERED_COMMANDS.contains(&"tracer_session_create"));
     assert!(REGISTERED_COMMANDS.contains(&"tracer_e2e_env"));
     // Contract surface must remain present.
@@ -720,4 +721,98 @@ fn e2e_env_command_lists_registered() {
     assert_eq!(env["module"], "W2-B");
     let cmds = env["registeredCommands"].as_array().expect("cmds");
     assert!(cmds.iter().any(|c| c.as_str() == Some("tracer_session_create")));
+}
+
+// ---------------------------------------------------------------------------
+// W2.1 integrated: multi-session focus switch via desktop boundary handlers
+// ---------------------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn journey_multi_session_presentation_focus_switch() {
+    let _g = journey_lock().await;
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("journey-ms-focus.db");
+    let plane = build_control_plane(Some(db)).await.expect("open plane");
+
+    let proj = plane_project_register(
+        &plane,
+        ProjectRegisterArgs {
+            root_path: dir.path().display().to_string(),
+            name: Some("ms-focus".into()),
+        },
+    )
+    .await
+    .expect("register");
+    let project_id = proj["project"]["projectId"]
+        .as_str()
+        .expect("projectId")
+        .to_string();
+
+    let a = plane_session_create(
+        &plane,
+        SessionCreateArgs {
+            project_id: project_id.clone(),
+            title: Some("focus-A".into()),
+            runtime: Some(runtime_opts("happy_prompt_stream")),
+        },
+    )
+    .await
+    .expect("create A");
+    let b = plane_session_create(
+        &plane,
+        SessionCreateArgs {
+            project_id: project_id.clone(),
+            title: Some("focus-B".into()),
+            runtime: Some(runtime_opts("happy_prompt_stream")),
+        },
+    )
+    .await
+    .expect("create B");
+    let sid_a = a["session"]["sessionId"].as_str().unwrap().to_string();
+    let sid_b = b["session"]["sessionId"].as_str().unwrap().to_string();
+
+    let snap_a = plane_presentation_focus(&plane, sid_a.clone())
+        .await
+        .expect("focus A");
+    assert_eq!(snap_a["activeSessionId"].as_str(), Some(sid_a.as_str()));
+    assert_no_raw_acp(&snap_a);
+
+    let snap_b = plane_presentation_focus(&plane, sid_b.clone())
+        .await
+        .expect("focus B");
+    assert_eq!(snap_b["activeSessionId"].as_str(), Some(sid_b.as_str()));
+    assert_ne!(snap_b["activeSessionId"].as_str(), Some(sid_a.as_str()));
+
+    // Snapshot command agrees with focus.
+    let snap = plane_presentation_snapshot(&plane).expect("snapshot");
+    assert_eq!(snap["activeSessionId"].as_str(), Some(sid_b.as_str()));
+    assert!(
+        snap.get("revision").and_then(|v| v.as_u64()).unwrap_or(0) >= 1,
+        "revision should advance on focus publish: {snap}"
+    );
+
+    // Both sessions remain independently addressable.
+    let da = plane_session_get(&plane, sid_a.clone()).await.expect("get A");
+    let db = plane_session_get(&plane, sid_b.clone()).await.expect("get B");
+    assert_eq!(da["session"]["sessionId"].as_str(), Some(sid_a.as_str()));
+    assert_eq!(db["session"]["sessionId"].as_str(), Some(sid_b.as_str()));
+    assert_no_raw_acp(&da);
+    assert_no_raw_acp(&db);
+
+    let _ = plane_session_stop(
+        &plane,
+        StopArgs {
+            session_id: sid_a,
+            force: Some(false),
+        },
+    )
+    .await;
+    let _ = plane_session_stop(
+        &plane,
+        StopArgs {
+            session_id: sid_b,
+            force: Some(false),
+        },
+    )
+    .await;
 }

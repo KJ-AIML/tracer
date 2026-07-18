@@ -28,6 +28,7 @@ export type TracerCommandName =
   | "tracer_runtime_status"
   | "tracer_app_info"
   | "tracer_presentation_snapshot"
+  | "tracer_presentation_focus"
   | "tracer_heli_status";
 
 /** Live event channel name (contract §2.2). */
@@ -178,6 +179,7 @@ function normalizeTauriArgs(
     "tracer_session_get",
     "tracer_approval_list_pending",
     "tracer_runtime_status",
+    "tracer_presentation_focus",
   ];
   if (flatTopLevel.includes(command)) {
     return args;

@@ -413,6 +413,23 @@ export function createMockBackend(scenario: MockScenario = "default"): MockBacke
         case "tracer_presentation_snapshot":
           return { ...state.snapshot } as TResult;
 
+        case "tracer_presentation_focus": {
+          const sessionId = String(args.sessionId ?? "");
+          if (!sessionId) {
+            throw new TracerInvokeError({
+              errorClass: "InvalidArgument",
+              message: "sessionId is required",
+              retryable: false,
+            });
+          }
+          state.snapshot = {
+            ...state.snapshot,
+            activeSessionId: sessionId,
+            revision: (state.snapshot.revision ?? 0) + 1,
+          };
+          return { ...state.snapshot } as TResult;
+        }
+
         case "tracer_heli_status": {
           const heli = state.heliUnavailable ? heliMissing() : state.snapshot.heli;
           state.snapshot = { ...state.snapshot, heli };

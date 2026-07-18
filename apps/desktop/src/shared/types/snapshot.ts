@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Presentation snapshot + command DTOs aligned with control-plane / TAURI_COMMAND_CONTRACT_V1.
  * React consumes only these typed shapes — never raw ACP, never SQLite rows.
  */
@@ -50,6 +50,8 @@ export interface SnapshotLastError {
  */
 export interface PresentationSnapshot {
   version: number;
+  /** Monotonic delivery revision from PresentationHub (W2-A); optional for older mocks. */
+  revision?: number;
   activeProjectId: string | null;
   activeSessionId: string | null;
   sessionStatus: SessionStatus | null;

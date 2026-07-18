@@ -43,6 +43,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::tracer_app_info,
             commands::tracer_presentation_snapshot,
+            commands::tracer_presentation_focus,
             commands::tracer_heli_status,
             commands::tracer_e2e_env,
             commands::tracer_project_list,

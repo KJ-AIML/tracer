@@ -1,4 +1,4 @@
-﻿# W2-C Completion Report â€” Multi-Session Runtime Polish
+# W2-C Completion Report - Multi-Session Runtime Polish
 
 **Task:** `tracer-w2-multi-session`  
 **Work item:** W2-C  
@@ -13,8 +13,8 @@
 
 | Item | Result |
 |---|---|
-| Goal achieved | **Yes** â€” multi local session isolation / recovery proven |
-| Parallel multi-runtime invention | **No** â€” HashMap registry model documented + hardened |
+| Goal achieved | **Yes** - multi local session isolation / recovery proven |
+| Parallel multi-runtime invention | **No** - HashMap registry model documented + hardened |
 | VS suite green | **Yes** (23/23) |
 | Desktop / live Grok / collab | **Not touched** (forbidden) |
 | Push / merge to main | **No** |
@@ -26,7 +26,7 @@
 | Path | Action | Notes |
 |---|---|---|
 | `crates/tracer-control-plane/src/plane.rs` | updated | multi-session docs; `presentation_focus`; live id/count; focus-clear on stop; deterministic `shutdown_all`; sequence repair; sticky `persist_failed` isolation |
-| `crates/tracer-control-plane/tests/multi_session.rs` | added | MS-01â€¦MS-16 isolation matrix |
+| `crates/tracer-control-plane/tests/multi_session.rs` | added | MS-01..MS-16 isolation matrix |
 | `tests/stress/src/stress_multi_session.rs` | added | overlapping live + create/stop with peer |
 | `tests/stress/Cargo.toml` | updated | register `stress_multi_session` target |
 
@@ -42,7 +42,7 @@
 
 | Path | Reason |
 |---|---|
-| `crates/tracer-control-plane/src/session/` | unnecessary â€” registry already on `ControlPlane` |
+| `crates/tracer-control-plane/src/session/` | unnecessary - registry already on `ControlPlane` |
 | Desktop multi-session UI | out of scope |
 | Changes to `session_runtime.rs` | W2-A owns presentation fan-out |
 
@@ -58,16 +58,16 @@ See `W2_C_ARCHITECTURE.md`.
 
 ## Key hardening (W2-C)
 
-1. **Focus API** for multi-session presentation without peer teardown  
-2. **Leak-free shutdown** (sorted stop + force-clear registry + snapshot reset)  
-3. **Session-local sequence repair** so metadata updates do not rewind `next_sequence` under concurrent ingest  
-4. **Sticky `persist_failed` isolation** â€” create-time UNIQUE races no longer permanently poison a Ready session; true mid-prompt persist failure still refuses â€œcompleteâ€ if history did not advance  
+1. **Focus API** for multi-session presentation without peer teardown
+2. **Leak-free shutdown** (sorted stop + force-clear registry + snapshot reset)
+3. **Session-local sequence repair** so metadata updates do not rewind `next_sequence` under concurrent ingest
+4. **Sticky `persist_failed` isolation** - create-time UNIQUE races no longer permanently poison a Ready session; true mid-prompt persist failure still refuses complete if history did not advance
 
 ## Validation
 
 | Command | Result |
 |---|---|
-| `cargo test -p tracer-control-plane --test multi_session -- --test-threads=1` | **16 passed** (Ã—3 stable) |
+| `cargo test -p tracer-control-plane --test multi_session -- --test-threads=1` | **16 passed** (3x stable) |
 | `cargo test -p tracer-control-plane --test vs_scenarios -- --test-threads=1` | **23 passed** |
 | `cargo test -p tracer-vs1-stress --test stress_multi_session -- --test-threads=1` | **2 passed** |
 
@@ -80,14 +80,16 @@ CI class: standard (no network / credentials / live Grok). Platform: Windows.
 | `46d6d24` | feat(w2-c): multi-session focus, shutdown, and sequence isolation |
 | `92caf1f` | test(w2-c): multi-session isolation MS-01..16 and stress suite |
 | `70e948f` | docs(w2-c): architecture, test matrix, and completion report |
-| `7775330` + follow-up | docs(w2-c): record commit SHAs in completion report |
+| `7775330`..tip | docs(w2-c): completion report SHA polish |
+
+Primary delivery is `46d6d24` + `92caf1f` + `70e948f`. Later docs commits only refine this report.
 
 ## Assumptions
 
-1. Fake ACP + Node on PATH for standard CI  
-2. Multi-thread Tokio test runtime  
-3. File SQLite preferred for multi-session durability proofs; in-memory allowed for pure isolation cases  
-4. Presentation live fan-out remains optional (W2-A); snapshot + `events_list` is the resilience path  
+1. Fake ACP + Node on PATH for standard CI
+2. Multi-thread Tokio test runtime
+3. File SQLite preferred for multi-session durability proofs; in-memory allowed for pure isolation cases
+4. Presentation live fan-out remains optional (W2-A); snapshot + `events_list` is the resilience path
 
 ## Risks / follow-ups
 
@@ -111,15 +113,12 @@ CI class: standard (no network / credentials / live Grok). Platform: Windows.
 
 ## Integration notes
 
-1. Recommend merge after integrator re-runs multi_session + vs_scenarios + stress on CI hosts  
-2. Optional: expose `presentation_focus` as a Tauri command when desktop multi-tab lands  
-3. Do **not** require live Grok for this gate  
-4. Never push from worker unless authorized  
+1. Recommend merge after integrator re-runs multi_session + vs_scenarios + stress on CI hosts
+2. Optional: expose `presentation_focus` as a Tauri command when desktop multi-tab lands
+3. Do **not** require live Grok for this gate
+4. Never push from worker unless authorized
 
 ## Lease
 
-- Released: yes (end of task)  
+- Released: yes (end of task)
 - Push: **no**
-
-
-

@@ -1085,3 +1085,109 @@ async fn ms16_parallel_prompts_across_sessions_supported() {
 
     let _ = cp.shutdown_all().await;
 }
+
+// ---------------------------------------------------------------------------
+// MS-17 Integrated: after focus switch, background ingest cannot steal focus
+// ---------------------------------------------------------------------------
+//
+// Command paths (submit/create) may set focus via refresh_snapshot_for
+// (authoritative "current session"). Post-persist hub updates use
+// publish_session_update, which only applies when session_id matches focus.
+// This test: start B prompt (steals focus), re-focus A, wait for B to finish —
+// A must remain focused while B's remaining ingest events land.
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn ms17_focus_stable_while_background_session_ingests() {
+    let _g = ms_lock().await;
+    let cp = std::sync::Arc::new(open_cp(None).await);
+    let (_dir, project_id) = register_temp_project(&cp).await;
+
+    let focused = cp
+        .session_create(
+            &project_id,
+            Some("focused".into()),
+            runtime_opts("happy_prompt_stream"),
+        )
+        .await
+        .unwrap();
+    let background = cp
+        .session_create(
+            &project_id,
+            Some("background".into()),
+            runtime_opts("happy_prompt_stream"),
+        )
+        .await
+        .unwrap();
+
+    // Start background stream first (command path may set focus to B).
+    let cp_bg = std::sync::Arc::clone(&cp);
+    let bg_id = background.session_id.clone();
+    let bg_handle =
+        tokio::spawn(async move { cp_bg.session_submit_prompt(&bg_id, "bg-stream").await });
+
+    // Give B a moment to begin, then pin focus on A.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let snap = cp
+        .presentation_focus(&focused.session_id)
+        .await
+        .expect("focus A");
+    assert_eq!(
+        snap.active_session_id.as_deref(),
+        Some(focused.session_id.as_str())
+    );
+    let rev_after_focus = snap.revision;
+
+    // While B continues, focus must remain A (ingest path must not steal).
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let s = cp.snapshot();
+        assert_eq!(
+            s.active_session_id.as_deref(),
+            Some(focused.session_id.as_str()),
+            "background post-persist updates must not steal presentation focus"
+        );
+        if bg_handle.is_finished() {
+            break;
+        }
+        if Instant::now() > deadline {
+            panic!("background prompt timed out");
+        }
+        tokio::time::sleep(Duration::from_millis(40)).await;
+    }
+
+    let bg_res = bg_handle.await.expect("join");
+    assert!(bg_res.is_ok(), "background prompt: {bg_res:?}");
+
+    // submit_prompt end path refreshes snapshot for B — command path may reclaim
+    // focus when B completes. Re-assert hub isolation by focusing A again and
+    // verifying publish_session_update for B does not flip focus (unit path
+    // already covered). Here we only require that explicit focus sticks until
+    // the next command on another session.
+    let after = cp
+        .presentation_focus(&focused.session_id)
+        .await
+        .expect("refocus A");
+    assert_eq!(
+        after.active_session_id.as_deref(),
+        Some(focused.session_id.as_str())
+    );
+    assert!(after.revision >= rev_after_focus);
+
+    // Background events exist and are session-local.
+    let eb = cp
+        .events_list(&background.session_id, 0, 500)
+        .await
+        .unwrap();
+    assert!(!eb.events.is_empty(), "background should have persisted events");
+    assert!(event_session_ids_consistent(
+        &eb.events,
+        &background.session_id
+    ));
+    // Focus still A after reading B history.
+    assert_eq!(
+        cp.snapshot().active_session_id.as_deref(),
+        Some(focused.session_id.as_str())
+    );
+
+    let _ = cp.shutdown_all().await;
+}

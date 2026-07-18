@@ -492,11 +492,17 @@ impl ControlPlane {
 
                 // W2-C multi-session: transient UNIQUE/next_sequence races during create
                 // must not sticky-poison a Ready session (persist_failed is per-session).
+                // Do not hold SessionRuntimeState MutexGuard across `.await` (Tauri Send).
+                let needs_repair = {
+                    let st = live.state.lock().expect("state");
+                    st.persist_failed
+                };
+                if needs_repair {
+                    let _ = self.repair_session_next_sequence(&session_id).await;
+                }
                 {
                     let mut st = live.state.lock().expect("state");
-                    if st.persist_failed {
-                        // Repair next_sequence once more before clearing sticky flag.
-                        let _ = self.repair_session_next_sequence(&session_id).await;
+                    if needs_repair {
                         st.persist_failed = false;
                     }
                     st.status = SessionStatus::Ready;
@@ -724,7 +730,7 @@ impl ControlPlane {
                         st.persist_failed = false;
                     }
                 }
-                self.refresh_snapshot_for(&live);
+                self.project_session_if_focused(&live);
                 Ok(SubmitPromptResult {
                     prompt_id,
                     agent_run_id,
@@ -750,7 +756,7 @@ impl ControlPlane {
                         }
                     }
                 }
-                self.refresh_snapshot_for(&live);
+                self.project_session_if_focused(&live);
                 Err(ControlPlaneError::from_adapter(&e))
             }
         }
@@ -828,7 +834,7 @@ impl ControlPlane {
                     }
                     st.pending_approvals.clear();
                 }
-                self.refresh_snapshot_for(&live);
+                self.project_session_if_focused(&live);
                 Ok(CancelResult {
                     accepted: true,
                     mode: mode.into(),
@@ -971,7 +977,7 @@ impl ControlPlane {
         }
 
         tokio::time::sleep(Duration::from_millis(80)).await;
-        self.refresh_snapshot_for(&live);
+        self.project_session_if_focused(&live);
         Ok(json!({ "resolved": true }))
     }
 
@@ -1228,48 +1234,39 @@ impl ControlPlane {
         live: &LiveSession,
     ) -> ControlPlaneResult<SessionDetail> {
         let rec = self.storage.get_session(&live.session_id).await?;
-        let st = live.state.lock().expect("state");
-        Ok(SessionDetail {
-            session_id: live.session_id.to_string(),
-            project_id: live.project_id.to_string(),
-            title: rec.title,
-            status: st.status,
-            runtime_kind: rec.runtime_kind,
-            runtime_session_id: st.runtime_session_id.clone().or(rec.runtime_session_id),
-            capabilities: st.capabilities.clone().or(rec.capabilities),
-            last_error: st.last_error.clone().or(rec.last_error),
-            active_agent_run_id: st.last_agent_run_id.clone(),
-            created_at: rec.created_at,
-            updated_at: rec.updated_at,
-            auth_state: st.auth_state,
-            process_alive: live.adapter.is_process_alive(),
-            protocol_ready: live.adapter.is_protocol_ready(),
-            session_ready: live.adapter.is_session_ready(),
-        })
-    }
-
-    fn refresh_snapshot_for(&self, live: &LiveSession) {
-        // Preserve heli (and any other global fields) from the current projection.
-        let heli = self.presentation.snapshot().heli;
-        let input = {
+        // Scope the std MutexGuard so it is never held across an `.await`
+        // (required for Tauri command futures to be `Send`).
+        let detail = {
             let st = live.state.lock().expect("state");
-            SessionProjectionInput {
+            SessionDetail {
                 session_id: live.session_id.to_string(),
                 project_id: live.project_id.to_string(),
+                title: rec.title,
                 status: st.status,
+                runtime_kind: rec.runtime_kind,
+                runtime_session_id: st.runtime_session_id.clone().or(rec.runtime_session_id),
+                capabilities: st.capabilities.clone().or(rec.capabilities),
+                last_error: st.last_error.clone().or(rec.last_error),
+                active_agent_run_id: st.last_agent_run_id.clone(),
+                created_at: rec.created_at,
+                updated_at: rec.updated_at,
                 auth_state: st.auth_state,
-                pending_approvals: st.pending_approvals.values().cloned().collect(),
-                last_error: st.last_error.clone(),
-                capabilities: st.capabilities.clone(),
-                latest_sequence: st.latest_sequence,
-                prompt_in_flight: st.prompt_in_flight,
                 process_alive: live.adapter.is_process_alive(),
                 protocol_ready: live.adapter.is_protocol_ready(),
                 session_ready: live.adapter.is_session_ready(),
             }
         };
-        // Ensure active session is set even when hub had a different active id
-        // (command path is authoritative for "current" session).
+        Ok(detail)
+    }
+
+    /// Force presentation focus onto `live` and publish (create / explicit focus).
+    ///
+    /// Prefer [`Self::project_session_if_focused`] for submit/cancel/approval so
+    /// background multi-session work does not steal the focused projection.
+    fn refresh_snapshot_for(&self, live: &LiveSession) {
+        // Preserve heli (and any other global fields) from the current projection.
+        let heli = self.presentation.snapshot().heli;
+        let input = Self::projection_input(live);
         let mut snap = self.presentation.snapshot();
         snap.version = SNAPSHOT_VERSION;
         snap.heli = heli;
@@ -1289,6 +1286,33 @@ impl ControlPlane {
             input.status,
         );
         self.presentation.publish_snapshot(snap);
+    }
+
+    /// Update the hub projection only when `live` is the focused session.
+    ///
+    /// Used by submit/cancel/approval command completion and matches the
+    /// post-persist path ([`PresentationHub::publish_session_update`]).
+    fn project_session_if_focused(&self, live: &LiveSession) {
+        let input = Self::projection_input(live);
+        self.presentation.publish_session_update(input);
+    }
+
+    fn projection_input(live: &LiveSession) -> SessionProjectionInput {
+        let st = live.state.lock().expect("state");
+        SessionProjectionInput {
+            session_id: live.session_id.to_string(),
+            project_id: live.project_id.to_string(),
+            status: st.status,
+            auth_state: st.auth_state,
+            pending_approvals: st.pending_approvals.values().cloned().collect(),
+            last_error: st.last_error.clone(),
+            capabilities: st.capabilities.clone(),
+            latest_sequence: st.latest_sequence,
+            prompt_in_flight: st.prompt_in_flight,
+            process_alive: live.adapter.is_process_alive(),
+            protocol_ready: live.adapter.is_protocol_ready(),
+            session_ready: live.adapter.is_session_ready(),
+        }
     }
 }
 

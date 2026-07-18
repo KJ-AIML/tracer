@@ -13,6 +13,7 @@
     "test:event-types": "pnpm --filter @tracer/event-types test",
     "test:ui": "pnpm --filter @tracer/ui test",
     "test:desktop": "pnpm --filter @tracer/desktop test",
+    "test:tauri-e2e": "node tools/tauri-e2e/run.mjs",
     "validate:js": "pnpm -r run build && pnpm -r run test"
   }
 }

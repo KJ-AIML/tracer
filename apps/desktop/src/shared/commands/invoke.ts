@@ -69,7 +69,11 @@ export function getMockBackend(): MockBackend | null {
   return mockBackend;
 }
 
-function isTauriAvailable(): boolean {
+/**
+ * Detect real Tauri IPC surface (`__TAURI__.core.invoke`).
+ * Exported for W2-B policy tests and shell diagnostics.
+ */
+export function isTauriAvailable(): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tauri = (globalThis as any).__TAURI__;
   return Boolean(tauri?.core?.invoke);
@@ -78,6 +82,9 @@ function isTauriAvailable(): boolean {
 /**
  * Effective backend: Tauri when available (unless forced mock), else mock backend.
  * Production desktop must prefer real commands.
+ *
+ * W2-B policy: when backend is `tauri`, invoke failures MUST surface as errors.
+ * There is **no silent downgrade to mock** after a failed real invoke.
  */
 export function resolveInvokeBackend(): "tauri" | "mock" {
   if (mode === "mock") return "mock";
@@ -100,10 +107,13 @@ export async function invokeTracer<TResult = unknown>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tauri = (globalThis as any).__TAURI__;
     if (!tauri?.core?.invoke) {
+      // Fail closed: never silently fall back to mock when Tauri was selected.
       throw new TracerInvokeError({
         errorClass: "InternalError",
-        message: "Tauri invoke API not available in this environment.",
+        message:
+          "Tauri invoke API not available in this environment (no silent mock downgrade).",
         retryable: false,
+        details: { command, mode, backend: "tauri" },
       });
     }
     try {
@@ -111,6 +121,7 @@ export async function invokeTracer<TResult = unknown>(
       // Contract front-end uses Record; desktop glue accepts camelCase fields.
       return (await tauri.core.invoke(command, normalizeTauriArgs(command, args))) as TResult;
     } catch (e: unknown) {
+      // Real Tauri invoke failure → structured error only. Never call mockBackend.
       if (typeof e === "string") {
         try {
           const parsed = JSON.parse(e) as {
@@ -134,11 +145,12 @@ export async function invokeTracer<TResult = unknown>(
         errorClass: "InternalError",
         message: e instanceof Error ? e.message : String(e),
         retryable: false,
+        details: { command, backend: "tauri", silentMockDowngrade: false },
       });
     }
   }
 
-  // mock backend
+  // mock backend (browser / unit tests only — never after a failed Tauri invoke)
   if (!mockBackend) {
     throw new TracerInvokeError({
       errorClass: "Unsupported",

@@ -27,5 +27,13 @@ tracer-domain = { workspace = true }
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+tracer-control-plane = { workspace = true }
+tracer-domain = { workspace = true }
+
 # NOTE: Do not add SQLite migrations or business logic here.
 # migrations/ is owned by W1-E; command surface composition by W1-F.
+# W2-B may add test-only E2E env hooks and plane_* handlers for harness.

@@ -1,21 +1,28 @@
-//! Tracer desktop Tauri bootstrap with W1-F control plane commands.
+//! Tracer desktop Tauri bootstrap with W1-F control plane commands + W2-B E2E hooks.
 //!
 //! Commands are thin glue over `tracer-control-plane`. No raw ACP, no direct
 //! SQLite from handlers, no process management outside the control plane.
+//!
+//! E2E / harness may import [`control_plane`] and [`commands::plane_*`] handlers
+//! without launching the WebView — same composition path as the real app.
 
-mod commands;
-mod control_plane;
+pub mod commands;
+pub mod control_plane;
 
 use std::sync::Arc;
 
 use commands::PlaneState;
 use control_plane::build_control_plane;
 
+/// Re-export registered command names for harness / contract checks.
+pub use commands::REGISTERED_COMMANDS;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Tokio runtime for async control plane open before tauri loop.
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    let plane = rt.block_on(build_control_plane(None)).unwrap_or_else(|e| {
+    let db_path = control_plane::resolve_database_path_for_e2e(None);
+    let plane = rt.block_on(build_control_plane(db_path)).unwrap_or_else(|e| {
         eprintln!("control plane open failed (shell will still start): {e}");
         // Fallback: try in-memory again so commands can report StorageError paths.
         rt.block_on(async {
@@ -37,6 +44,7 @@ pub fn run() {
             commands::tracer_app_info,
             commands::tracer_presentation_snapshot,
             commands::tracer_heli_status,
+            commands::tracer_e2e_env,
             commands::tracer_project_list,
             commands::tracer_project_register,
             commands::tracer_project_get,
@@ -63,6 +71,7 @@ fn app_shell_info() -> serde_json::Value {
         "name": "tracer-desktop",
         "module": "W1-F",
         "mode": "control-plane",
-        "note": "tracer_* commands registered via tracer-control-plane"
+        "note": "tracer_* commands registered via tracer-control-plane",
+        "e2eHooks": true
     })
 }

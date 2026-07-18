@@ -1,0 +1,16 @@
+{
+  "name": "@tracer/tauri-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "W2-B Tauri desktop boundary E2E harness (fake ACP, no network, no credentials)",
+  "scripts": {
+    "test": "node ./run.mjs",
+    "test:policy": "node ./run.mjs --policy-only",
+    "test:boundary": "node ./run.mjs --boundary-only",
+    "test:gui-probe": "node ./run.mjs --gui-probe"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -90,12 +90,33 @@ export function artifactEntry(absPath, artifactType) {
  */
 export function generateProvenance(opts = {}) {
   const identity = checkIdentity();
+  if (!identity.ok) {
+    throw new Error(
+      `version/identity drift: refuse provenance until checkIdentity passes (${identity.checks
+        .filter((c) => c.status === "fail")
+        .map((c) => c.id)
+        .join(", ")})`,
+    );
+  }
   const found = discoverArtifacts();
   const signing = classifyReleaseSigning(found.all);
-  const sourceSha = git(["rev-parse", "HEAD"]);
+  const headSha = git(["rev-parse", "HEAD"]);
+  // buildSourceSha = product/tooling freeze used to produce the bytes.
+  // gateTipSha = tip after optional report-only commits (may differ).
+  const buildSourceSha =
+    opts.buildSourceSha ||
+    process.env.TRACER_BUILD_SOURCE_SHA ||
+    headSha;
+  const gateTipSha =
+    opts.gateTipSha || process.env.TRACER_GATE_TIP_SHA || headSha;
+  const sourceSha = buildSourceSha; // backward-compatible alias of buildSourceSha
   const tag = git(["describe", "--tags", "--exact-match", "HEAD"]) || null;
   const product = identity.identity?.productName || "Tracer";
   const version = identity.version || identity.identity?.resolved?.versions?.tauri;
+  const schemaLogicalVersion =
+    opts.schemaLogicalVersion ||
+    process.env.TRACER_SCHEMA_LOGICAL_VERSION ||
+    "2";
 
   const artifacts = [];
   const portable = artifactEntry(found.portable, "portable");
@@ -111,7 +132,10 @@ export function generateProvenance(opts = {}) {
     generatedAt: new Date().toISOString(),
     product,
     version,
+    schemaLogicalVersion,
     sourceSha,
+    buildSourceSha,
+    gateTipSha,
     tag,
     platform: "windows-x64",
     identifier: identity.identity?.identifier || "dev.tracer.desktop",
@@ -122,7 +146,9 @@ export function generateProvenance(opts = {}) {
     buildToolchain: toolchain(),
     artifacts,
     distinctions: {
-      provenance: "build identity + source SHA + toolchain",
+      provenance: "build identity + buildSourceSha + toolchain",
+      buildSourceSha: "immutable product/tooling commit that produced artifacts",
+      gateTipSha: "gate tip including report-only commits after the build",
       integrity: "sizeBytes + sha256 per artifact",
       signing: "Authenticode classification only",
       testEvidence: "RC / upgrade result JSON files are separate",
@@ -185,8 +211,21 @@ export function verifyProvenance(manifestPath) {
   if (!manifest.sourceSha || !/^[0-9a-f]{40}$/i.test(manifest.sourceSha)) {
     errors.push("sourceSha missing or not a 40-char hex SHA");
   }
+  if (
+    !manifest.buildSourceSha ||
+    !/^[0-9a-f]{40}$/i.test(manifest.buildSourceSha)
+  ) {
+    errors.push("buildSourceSha missing or not a 40-char hex SHA");
+  }
+  if (!manifest.gateTipSha || !/^[0-9a-f]{40}$/i.test(manifest.gateTipSha)) {
+    errors.push("gateTipSha missing or not a 40-char hex SHA");
+  }
   if (!manifest.version) errors.push("version missing");
   if (!manifest.product) errors.push("product missing");
+  if (!manifest.identifier) errors.push("identifier missing");
+  if (manifest.schemaLogicalVersion == null) {
+    errors.push("schemaLogicalVersion missing");
+  }
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
     errors.push("artifacts[] empty");
   }

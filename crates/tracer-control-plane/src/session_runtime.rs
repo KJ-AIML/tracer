@@ -22,13 +22,21 @@
 //! This split avoids `Handle::block_on` deadlocks while keeping ingestion
 //! alive during blocking `submit_prompt`, pending approval, and cancel. No
 //! lock is held across long-running adapter RPCs.
+//!
+//! # Drain lifecycle (W2.2-C)
+//!
+//! Prompt/adapter return does **not** end ingestion. Authoritative completion:
+//! terminal event persisted → state/presentation committed → late-event grace
+//! → source closed or stop → drain joined → pump joined → runtime shutdown.
+//! Expected channel close is **not** a `persist_error`. Real storage failures
+//! remain counted and observable via `persist_errors` / `persist_failed`.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver as StdReceiver};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tokio::sync::mpsc::{
@@ -46,6 +54,10 @@ use crate::convert::{
     status_hint_from_event_type,
 };
 use crate::presentation::{PresentationHub, SessionProjectionInput};
+use crate::session::lifecycle::{
+    is_prompt_terminal_event, is_run_terminal_status, late_event_disposition, DrainLifecyclePhase,
+    LateEventDisposition, LATE_DRAIN_JOIN_TIMEOUT,
+};
 use crate::types::PendingApprovalView;
 
 /// Bounded internal handoff between OS drain and async persist pump.
@@ -57,8 +69,8 @@ pub const BRIDGE_CAPACITY: usize = 256;
 /// Observability counters for the dual-stage ingest path (soak / diagnostics).
 ///
 /// Counters are best-effort and do not affect control flow. Used by VS1-H3 soak
-/// to measure drain throughput, persist success, and presentation fan-out without
-/// redesigning the control plane.
+/// and W2.2-C drain lifecycle tests. `persist_errors` counts **real** storage
+/// failures only — never expected channel close or normal late-drain exit.
 #[derive(Debug, Default)]
 pub struct IngestMetrics {
     /// Adapter events accepted into the bounded bridge (`blocking_send` ok).
@@ -69,12 +81,28 @@ pub struct IngestMetrics {
     pub events_persisted: AtomicU64,
     /// Duplicate event_id ignored by storage.
     pub events_duplicate: AtomicU64,
-    /// Persist failures (non-duplicate).
+    /// Persist failures (non-duplicate). Real storage errors only.
     pub persist_errors: AtomicU64,
     /// Presentation hub publish attempts after successful persist.
     pub presentation_sends: AtomicU64,
     /// Presentation publish skipped (hub shutdown / absent). Kept for metric shape.
     pub presentation_send_failures: AtomicU64,
+    /// Adapter event source disconnected (expected lifecycle; not a persist error).
+    pub channel_closes: AtomicU64,
+    /// Prompt-cycle terminal events successfully persisted.
+    pub terminal_persisted: AtomicU64,
+    /// Events observed after a terminal was already persisted this cycle.
+    pub late_events_observed: AtomicU64,
+    /// Late events that were still applied (no status regression / upgrades).
+    pub late_events_applied: AtomicU64,
+    /// Late duplicate terminals counted without status churn.
+    pub late_duplicate_terminals: AtomicU64,
+    /// OS drain thread join completed.
+    pub drain_joins: AtomicU64,
+    /// Async persist pump exited cleanly (joined or finished before abort).
+    pub pump_joins: AtomicU64,
+    /// Pump was aborted after join timeout (should stay near zero).
+    pub pump_aborts: AtomicU64,
 }
 
 impl IngestMetrics {
@@ -88,6 +116,14 @@ impl IngestMetrics {
             persist_errors: self.persist_errors.load(Ordering::Relaxed),
             presentation_sends: self.presentation_sends.load(Ordering::Relaxed),
             presentation_send_failures: self.presentation_send_failures.load(Ordering::Relaxed),
+            channel_closes: self.channel_closes.load(Ordering::Relaxed),
+            terminal_persisted: self.terminal_persisted.load(Ordering::Relaxed),
+            late_events_observed: self.late_events_observed.load(Ordering::Relaxed),
+            late_events_applied: self.late_events_applied.load(Ordering::Relaxed),
+            late_duplicate_terminals: self.late_duplicate_terminals.load(Ordering::Relaxed),
+            drain_joins: self.drain_joins.load(Ordering::Relaxed),
+            pump_joins: self.pump_joins.load(Ordering::Relaxed),
+            pump_aborts: self.pump_aborts.load(Ordering::Relaxed),
         }
     }
 }
@@ -109,6 +145,22 @@ pub struct IngestMetricsSnapshot {
     pub presentation_sends: u64,
     /// See [`IngestMetrics::presentation_send_failures`].
     pub presentation_send_failures: u64,
+    /// See [`IngestMetrics::channel_closes`].
+    pub channel_closes: u64,
+    /// See [`IngestMetrics::terminal_persisted`].
+    pub terminal_persisted: u64,
+    /// See [`IngestMetrics::late_events_observed`].
+    pub late_events_observed: u64,
+    /// See [`IngestMetrics::late_events_applied`].
+    pub late_events_applied: u64,
+    /// See [`IngestMetrics::late_duplicate_terminals`].
+    pub late_duplicate_terminals: u64,
+    /// See [`IngestMetrics::drain_joins`].
+    pub drain_joins: u64,
+    /// See [`IngestMetrics::pump_joins`].
+    pub pump_joins: u64,
+    /// See [`IngestMetrics::pump_aborts`].
+    pub pump_aborts: u64,
 }
 
 /// Optional artificial persist delay for soak "slow database" injection.
@@ -126,6 +178,25 @@ fn soak_persist_delay() -> Duration {
         .unwrap_or(Duration::ZERO)
 }
 
+/// Process-wide test inject for deterministic persist failures (W2.2-C).
+/// Prefer this over env vars so suite tests cannot leak across cases.
+static TEST_FORCE_PERSIST_ERROR: AtomicBool = AtomicBool::new(false);
+
+/// Enable/disable forced persist failures (tests only). Production never calls this.
+pub fn set_test_force_persist_error(on: bool) {
+    TEST_FORCE_PERSIST_ERROR.store(on, Ordering::SeqCst);
+}
+
+fn test_force_persist_error() -> bool {
+    if TEST_FORCE_PERSIST_ERROR.load(Ordering::SeqCst) {
+        return true;
+    }
+    // Legacy env hook retained for soak scripts.
+    std::env::var("TRACER_TEST_FORCE_PERSIST_ERROR")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
 /// Shared mutable session runtime state (not held across adapter RPCs for cancel).
 #[derive(Debug)]
 pub struct SessionRuntimeState {
@@ -140,6 +211,12 @@ pub struct SessionRuntimeState {
     pub last_prompt_id: Option<String>,
     pub last_agent_run_id: Option<String>,
     pub persist_failed: bool,
+    /// Current drain lifecycle phase (W2.2-C).
+    pub drain_phase: DrainLifecyclePhase,
+    /// Last prompt-cycle terminal event type that was persisted (if any).
+    pub last_terminal_event: Option<String>,
+    /// True once a prompt-cycle terminal has been persisted for the current run.
+    pub terminal_persisted: bool,
 }
 
 impl SessionRuntimeState {
@@ -156,6 +233,29 @@ impl SessionRuntimeState {
             last_prompt_id: None,
             last_agent_run_id: None,
             persist_failed: false,
+            drain_phase: DrainLifecyclePhase::RuntimeStarted,
+            last_terminal_event: None,
+            terminal_persisted: false,
+        }
+    }
+
+    /// Mark a new prompt cycle (clears sticky terminal of prior run).
+    pub fn begin_prompt_cycle(&mut self) {
+        self.prompt_in_flight = true;
+        self.terminal_persisted = false;
+        self.last_terminal_event = None;
+        self.drain_phase = self.drain_phase.advance_to(DrainLifecyclePhase::PromptActive);
+    }
+
+    /// Record that the adapter operation returned (ingestion may still be active).
+    pub fn mark_adapter_operation_returned(&mut self) {
+        self.drain_phase = self
+            .drain_phase
+            .advance_to(DrainLifecyclePhase::AdapterOperationReturned);
+        if self.terminal_persisted {
+            self.drain_phase = self
+                .drain_phase
+                .advance_to(DrainLifecyclePhase::LateEventGrace);
         }
     }
 }
@@ -224,6 +324,13 @@ impl LiveSession {
         let sid = self.session_id;
         let metrics_drain = Arc::clone(&self.metrics);
 
+        {
+            let mut st = self.state.lock().expect("state");
+            st.drain_phase = st
+                .drain_phase
+                .advance_to(DrainLifecyclePhase::EventDrainActive);
+        }
+
         let drain = thread::Builder::new()
             .name(format!("cp-drain-{}", sid))
             .spawn(move || {
@@ -256,18 +363,103 @@ impl LiveSession {
         *self.pump_abort.lock().expect("pump") = Some(pump);
     }
 
+    /// Signal stop, join OS drain (closes bridge), then join pump with timeout.
+    ///
+    /// Prefer this from async control-plane paths. Does **not** abort the pump
+    /// until `LATE_DRAIN_JOIN_TIMEOUT` so in-flight terminal persists complete.
+    pub async fn stop_ingestor_async(&self) {
+        self.signal_stop_ingest();
+        self.join_drain_thread();
+        self.join_pump_async().await;
+        let mut st = self.state.lock().expect("state");
+        st.drain_phase = st
+            .drain_phase
+            .advance_to(DrainLifecyclePhase::RuntimeShutdown);
+    }
+
+    /// Sync stop path (Drop / legacy callers): join drain, spin-wait pump, abort if stuck.
     pub fn stop_ingestor(&self) {
+        self.signal_stop_ingest();
+        self.join_drain_thread();
+        self.join_pump_sync();
+        let mut st = self.state.lock().expect("state");
+        st.drain_phase = st
+            .drain_phase
+            .advance_to(DrainLifecyclePhase::RuntimeShutdown);
+    }
+
+    fn signal_stop_ingest(&self) {
         self.stop_ingest.store(true, Ordering::SeqCst);
+        let mut st = self.state.lock().expect("state");
+        st.drain_phase = st
+            .drain_phase
+            .advance_to(DrainLifecyclePhase::SourceClosedOrBoundedDrainComplete);
+    }
+
+    fn join_drain_thread(&self) {
         if let Ok(mut g) = self.drain_join.lock() {
             if let Some(h) = g.take() {
                 let _ = h.join();
+                self.metrics.drain_joins.fetch_add(1, Ordering::Relaxed);
+                let mut st = self.state.lock().expect("state");
+                st.drain_phase = st
+                    .drain_phase
+                    .advance_to(DrainLifecyclePhase::DrainTaskJoined);
             }
         }
-        if let Ok(mut g) = self.pump_abort.lock() {
-            if let Some(h) = g.take() {
-                h.abort();
+    }
+
+    async fn join_pump_async(&self) {
+        let mut handle = match self.pump_abort.lock().expect("pump").take() {
+            Some(h) => h,
+            None => return,
+        };
+        let timeout = LATE_DRAIN_JOIN_TIMEOUT;
+        tokio::select! {
+            res = &mut handle => {
+                let _ = res;
+                self.metrics.pump_joins.fetch_add(1, Ordering::Relaxed);
+            }
+            _ = tokio::time::sleep(timeout) => {
+                warn!(
+                    session = %self.session_id,
+                    "persist pump join timed out; aborting residual pump"
+                );
+                handle.abort();
+                let _ = handle.await;
+                self.metrics.pump_aborts.fetch_add(1, Ordering::Relaxed);
             }
         }
+    }
+
+    fn join_pump_sync(&self) {
+        let handle = match self.pump_abort.lock().expect("pump").take() {
+            Some(h) => h,
+            None => return,
+        };
+        let deadline = Instant::now() + LATE_DRAIN_JOIN_TIMEOUT;
+        while !handle.is_finished() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        if handle.is_finished() {
+            // Drop finished handle (result discarded).
+            drop(handle);
+            self.metrics.pump_joins.fetch_add(1, Ordering::Relaxed);
+        } else {
+            handle.abort();
+            // Brief wait after abort so Drop does not race OS threads.
+            let abort_deadline = Instant::now() + Duration::from_millis(200);
+            while !handle.is_finished() && Instant::now() < abort_deadline {
+                thread::sleep(Duration::from_millis(5));
+            }
+            drop(handle);
+            self.metrics.pump_aborts.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Current lifecycle phase snapshot.
+    pub fn drain_phase(&self) -> DrainLifecyclePhase {
+        self.state.lock().expect("state").drain_phase
     }
 }
 
@@ -279,16 +471,14 @@ impl Drop for LiveSession {
             graceful_timeout: Duration::from_secs(2),
             force_timeout: Duration::from_secs(2),
         });
+        // Join drain fully; join/abort pump with timeout so Drop does not leak.
         if let Ok(mut g) = self.drain_join.lock() {
             if let Some(h) = g.take() {
                 let _ = h.join();
+                self.metrics.drain_joins.fetch_add(1, Ordering::Relaxed);
             }
         }
-        if let Ok(mut g) = self.pump_abort.lock() {
-            if let Some(h) = g.take() {
-                h.abort();
-            }
-        }
+        self.join_pump_sync();
     }
 }
 
@@ -336,17 +526,24 @@ fn drain_adapter(
                         metrics.bridge_accepted.fetch_add(1, Ordering::Relaxed);
                     }
                     Err(_) => {
+                        // Bridge closed (pump dropped) — lifecycle, not persist_error.
                         metrics.bridge_send_failures.fetch_add(1, Ordering::Relaxed);
                         break;
                     }
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // Expected channel close when adapter shuts down / drops sender.
+                // Must never increment persist_errors.
+                metrics.channel_closes.fetch_add(1, Ordering::Relaxed);
+                debug!(session = %session_id, "adapter event channel closed (expected lifecycle)");
+                break;
+            }
         }
     }
     debug!(session = %session_id, "adapter drain stopped");
-    // Dropping tx closes bridge for async pump.
+    // Dropping tx closes bridge for async pump → pump drains remaining then exits.
 }
 
 async fn async_persist_pump(
@@ -445,7 +642,40 @@ async fn persist_one(
                 .timestamp
                 .format(&time::format_description::well_known::Rfc3339)
                 .unwrap_or_default();
-            let record = envelope_to_event_record(env);
+
+            // Observe terminal before persist so phase reflects drain progress.
+            if is_prompt_terminal_event(&event_type) {
+                let mut st = state.lock().expect("state");
+                st.drain_phase = st
+                    .drain_phase
+                    .advance_to(DrainLifecyclePhase::AdapterTerminalObserved);
+            }
+
+            // Late-event bookkeeping (policy applied after successful persist).
+            let late = {
+                let st = state.lock().expect("state");
+                st.terminal_persisted
+            };
+            if late {
+                metrics.late_events_observed.fetch_add(1, Ordering::Relaxed);
+            }
+
+            // Deterministic test hook: force storage failure without redesigning SQLite.
+            if test_force_persist_error() {
+                warn!(
+                    session = %session_id,
+                    event_type = %event_type,
+                    "TRACER_TEST_FORCE_PERSIST_ERROR: counting real persist failure"
+                );
+                metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
+                let mut st = state.lock().expect("state");
+                st.persist_failed = true;
+                st.last_error = Some(serde_json::json!({
+                    "errorClass": "StorageError",
+                    "message": "injected persist failure (TRACER_TEST_FORCE_PERSIST_ERROR)",
+                }));
+                return;
+            }
 
             // Soak-only artificial latency (TRACER_SOAK_PERSIST_DELAY_MS).
             let delay = soak_persist_delay();
@@ -453,115 +683,173 @@ async fn persist_one(
                 tokio::time::sleep(delay).await;
             }
 
-            match storage.append_event(record).await {
-                Ok(stored) => {
-                    metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
-                    let seq = stored.sequence;
-                    {
+            // Bounded retries: multi-session WAL writers + sequence races must not
+            // inflate persist_errors for recoverable contention. True durable
+            // failures still count after the budget is exhausted.
+            const PERSIST_ATTEMPTS: u32 = 8;
+            let mut last_err: Option<tracer_storage::StorageError> = None;
+            let mut stored_ok = false;
+            for attempt in 0..PERSIST_ATTEMPTS {
+                let record = envelope_to_event_record(env);
+                match storage.append_event(record).await {
+                    Ok(stored) => {
+                        on_persist_success(
+                            metrics,
+                            state,
+                            session_id,
+                            project_id,
+                            storage,
+                            presentation,
+                            adapter,
+                            &event_type,
+                            &payload,
+                            &session_id.to_string(),
+                            &ts,
+                            stored.sequence,
+                            late,
+                        )
+                        .await;
+                        stored_ok = true;
+                        break;
+                    }
+                    Err(tracer_storage::StorageError::AlreadyExists { entity, id }) => {
+                        warn!(
+                            session = %session_id,
+                            entity = %entity,
+                            id = %id,
+                            attempt,
+                            "persist unique conflict; retrying"
+                        );
+                        last_err = Some(tracer_storage::StorageError::AlreadyExists {
+                            entity,
+                            id,
+                        });
+                        // Brief yield so peer writers / next_sequence advance.
+                        tokio::time::sleep(Duration::from_millis(5 * (1u64 << attempt.min(4)))).await;
+                    }
+                    Err(e) => {
+                        // Transient database lock / IO: retry. Other errors also
+                        // get a short retry budget before counting as real failure.
+                        warn!(
+                            session = %session_id,
+                            attempt,
+                            error = %e,
+                            "persist attempt failed; may retry"
+                        );
+                        last_err = Some(e);
+                        tokio::time::sleep(Duration::from_millis(15 * (1u64 << attempt.min(4)))).await;
+                    }
+                }
+            }
+
+            if !stored_ok {
+                match last_err {
+                    Some(tracer_storage::StorageError::AlreadyExists { entity, id }) => {
+                        // Unrecoverable duplicate / sequence stall: apply state only.
+                        // Not a false storage failure — count as duplicate, not persist_error.
+                        debug!(
+                            session = %session_id,
+                            entity = %entity,
+                            id = %id,
+                            "duplicate event ignored after retries"
+                        );
+                        metrics.events_duplicate.fetch_add(1, Ordering::Relaxed);
                         let mut st = state.lock().expect("state");
-                        st.latest_sequence = seq;
                         apply_event_to_state(
                             &mut st,
                             &event_type,
                             &payload,
                             &session_id.to_string(),
                             &ts,
+                            metrics,
                         );
                         st.auth_state = adapter.auth_state();
                     }
-                    publish_presentation(
-                        presentation,
-                        state,
-                        session_id,
-                        project_id,
-                        adapter,
-                        metrics,
-                    );
-                    let status_now = state.lock().expect("state").status;
-                    let _ = storage.update_session_status(&session_id, status_now).await;
-                }
-                Err(tracer_storage::StorageError::AlreadyExists { entity, id }) => {
-                    // Under burst load SQLite may surface UNIQUE on (session_id, sequence)
-                    // when next_sequence is briefly contended. Retry once with a fresh
-                    // storage event_id; append_event re-reads next_sequence each call.
-                    warn!(
-                        session = %session_id,
-                        entity = %entity,
-                        id = %id,
-                        "persist unique conflict; retrying once"
-                    );
-                    let retry = envelope_to_event_record(env);
-                    match storage.append_event(retry).await {
-                        Ok(stored) => {
-                            metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
-                            let seq = stored.sequence;
-                            {
-                                let mut st = state.lock().expect("state");
-                                st.latest_sequence = seq;
-                                apply_event_to_state(
-                                    &mut st,
-                                    &event_type,
-                                    &payload,
-                                    &session_id.to_string(),
-                                    &ts,
-                                );
-                                st.auth_state = adapter.auth_state();
-                            }
-                            publish_presentation(
-                                presentation,
-                                state,
-                                session_id,
-                                project_id,
-                                adapter,
-                                metrics,
-                            );
-                            let status_now = state.lock().expect("state").status;
-                            let _ = storage.update_session_status(&session_id, status_now).await;
-                        }
-                        Err(tracer_storage::StorageError::AlreadyExists { entity, id }) => {
-                            // True duplicate (or unrecoverable sequence stall): apply state only.
-                            debug!(
-                                session = %session_id,
-                                entity = %entity,
-                                id = %id,
-                                "duplicate event ignored after retry"
-                            );
-                            metrics.events_duplicate.fetch_add(1, Ordering::Relaxed);
-                            let mut st = state.lock().expect("state");
-                            apply_event_to_state(
-                                &mut st,
-                                &event_type,
-                                &payload,
-                                &session_id.to_string(),
-                                &ts,
-                            );
-                            st.auth_state = adapter.auth_state();
-                        }
-                        Err(e) => {
-                            warn!(session = %session_id, error = %e, "persist retry failed");
-                            metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
-                            let mut st = state.lock().expect("state");
-                            st.persist_failed = true;
-                            st.last_error = Some(serde_json::json!({
-                                "errorClass": "StorageError",
-                                "message": e.to_string(),
-                            }));
-                        }
+                    Some(e) => {
+                        warn!(session = %session_id, error = %e, "persist failed after retries");
+                        metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
+                        let mut st = state.lock().expect("state");
+                        st.persist_failed = true;
+                        st.last_error = Some(serde_json::json!({
+                            "errorClass": "StorageError",
+                            "message": e.to_string(),
+                        }));
                     }
-                }
-                Err(e) => {
-                    warn!(session = %session_id, error = %e, "persist failed");
-                    metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
-                    let mut st = state.lock().expect("state");
-                    st.persist_failed = true;
-                    st.last_error = Some(serde_json::json!({
-                        "errorClass": "StorageError",
-                        "message": e.to_string(),
-                    }));
+                    None => {
+                        metrics.persist_errors.fetch_add(1, Ordering::Relaxed);
+                        let mut st = state.lock().expect("state");
+                        st.persist_failed = true;
+                    }
                 }
             }
         }
     }
+}
+
+/// Shared post-persist path: state, presentation (post-persist only), terminal phase.
+async fn on_persist_success(
+    metrics: &IngestMetrics,
+    state: &Arc<Mutex<SessionRuntimeState>>,
+    session_id: SessionId,
+    project_id: tracer_storage::ProjectId,
+    storage: &SqliteStorage,
+    presentation: &Arc<Mutex<Option<PresentationHub>>>,
+    adapter: &RuntimeAdapter,
+    event_type: &str,
+    payload: &Value,
+    session_id_str: &str,
+    ts: &str,
+    seq: i64,
+    was_late: bool,
+) {
+    metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
+    {
+        let mut st = state.lock().expect("state");
+        st.latest_sequence = seq;
+        apply_event_to_state(&mut st, event_type, payload, session_id_str, ts, metrics);
+        st.auth_state = adapter.auth_state();
+
+        if is_prompt_terminal_event(event_type) {
+            st.terminal_persisted = true;
+            st.last_terminal_event = Some(event_type.to_string());
+            st.drain_phase = st
+                .drain_phase
+                .advance_to(DrainLifecyclePhase::TerminalPersisted);
+            metrics.terminal_persisted.fetch_add(1, Ordering::Relaxed);
+        }
+        if was_late {
+            metrics.late_events_applied.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    // Presentation only after successful persist (terminal or not).
+    publish_presentation(
+        presentation,
+        state,
+        session_id,
+        project_id,
+        adapter,
+        metrics,
+    );
+
+    if is_prompt_terminal_event(event_type) {
+        let mut st = state.lock().expect("state");
+        st.drain_phase = st
+            .drain_phase
+            .advance_to(DrainLifecyclePhase::TerminalStateCommitted);
+        if matches!(
+            st.drain_phase,
+            DrainLifecyclePhase::AdapterOperationReturned
+                | DrainLifecyclePhase::TerminalStateCommitted
+        ) {
+            st.drain_phase = st
+                .drain_phase
+                .advance_to(DrainLifecyclePhase::LateEventGrace);
+        }
+    }
+
+    let status_now = state.lock().expect("state").status;
+    let _ = storage.update_session_status(&session_id, status_now).await;
 }
 
 /// Post-persist presentation publish: projection update + coalesced notify.
@@ -611,15 +899,65 @@ fn apply_event_to_state(
     payload: &Value,
     session_id: &str,
     ts: &str,
+    metrics: &IngestMetrics,
 ) {
-    let terminal = matches!(
+    let hard_terminal = matches!(
         st.status,
         SessionStatus::Failed | SessionStatus::Disconnected | SessionStatus::Stopped
     );
+    // Prompt-cycle terminal already persisted: apply late-event policy.
+    let already_prompt_terminal = st.terminal_persisted || hard_terminal;
+    let disposition = late_event_disposition(
+        already_prompt_terminal,
+        st.last_terminal_event.as_deref(),
+        event_type,
+    );
+
+    match disposition {
+        LateEventDisposition::ExpectedChannelClose => return,
+        LateEventDisposition::DuplicateTerminal => {
+            metrics
+                .late_duplicate_terminals
+                .fetch_add(1, Ordering::Relaxed);
+            // Persist already happened; do not churn status or reopen the run.
+            st.prompt_in_flight = false;
+            return;
+        }
+        LateEventDisposition::PersistNoStatusRegression => {
+            // May update non-status maps (e.g. clear approvals) but never reopen
+            // a finished run or clear hard terminal status.
+            match event_type {
+                "approval.resolved" => {
+                    if let Some(aid) = approval_id_from_payload(payload) {
+                        st.pending_approvals.remove(&aid);
+                    }
+                }
+                "approval.requested" => {
+                    // Late approval after terminal: keep for audit map only if still useful;
+                    // do not move status back to AwaitingApproval.
+                    if let Some(p) = pending_from_payload(session_id, payload, ts) {
+                        st.pending_approvals.insert(p.approval_id.clone(), p);
+                    }
+                }
+                "adapter.protocol.error" => {
+                    st.last_error = Some(payload.clone());
+                }
+                "adapter.protocol.unknown" => {}
+                // Late deltas / ready / submitted: ignore status transitions.
+                _ => {}
+            }
+            return;
+        }
+        LateEventDisposition::ApplyFully => {}
+    }
+
+    let terminal = hard_terminal
+        || (st.terminal_persisted && is_run_terminal_status(st.status));
 
     match event_type {
-        "session.completed" if !terminal && st.status != SessionStatus::Cancelling => {
+        "session.completed" if !hard_terminal && st.status != SessionStatus::Cancelling => {
             if !st.persist_failed {
+                // Successful prompt cycle returns to Ready (session remains usable).
                 st.status = SessionStatus::Ready;
             }
             st.prompt_in_flight = false;

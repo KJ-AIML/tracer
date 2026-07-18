@@ -40,6 +40,7 @@ pub mod error;
 pub mod heli_bridge;
 pub mod plane;
 pub mod presentation;
+pub mod session;
 pub mod session_runtime;
 pub mod types;
 
@@ -50,5 +51,11 @@ pub use presentation::{
     PresentationHub, PresentationMetricsSnapshot, PresentationSubscription, SessionProjectionInput,
     DEFAULT_NOTIFY_CAPACITY,
 };
-pub use session_runtime::{IngestMetrics, IngestMetricsSnapshot, BRIDGE_CAPACITY};
+pub use session::{
+    is_prompt_terminal_event, late_event_disposition, DrainLifecyclePhase, LateEventDisposition,
+    LATE_DRAIN_JOIN_TIMEOUT, LATE_EVENT_GRACE,
+};
+pub use session_runtime::{
+    set_test_force_persist_error, IngestMetrics, IngestMetricsSnapshot, BRIDGE_CAPACITY,
+};
 pub use types::*;

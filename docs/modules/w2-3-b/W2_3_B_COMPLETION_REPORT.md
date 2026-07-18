@@ -120,7 +120,7 @@ See `docs/validation/live-grok/LIVE_GUI_RESULTS.md`.
 | `766dd20` | test(w2.3-b): complete live GUI validation harness |
 | `(docs tip)` | docs(w2.3-b): record live GUI evidence and classifications |
 
-Tip SHA recorded after docs commit.
+Branch tip: `8ce54178eebfa0615942be7248ff3d6e6c916795`
 
 ## 9. Residual risks
 

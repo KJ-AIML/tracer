@@ -137,3 +137,20 @@ Signing: **UNSIGNED_DEVELOPMENT_RC** (NotSigned). Identity PASS (Tracer / `dev.t
 | Tag | `tracer-wave2.3-windows-rc` (annotated) |
 | Lease release | `tracer-w2-3-integration` |
 | Push | **Never** |
+
+
+## 12. Commit pin table (pre-finalize)
+
+| Role | SHA |
+|---|---|
+| Baseline main (Gate 2.2.3) | `8f3b3cb568483fde065dae77d341b38e597b23b2` |
+| Merge C | `4f4bb33ae639c51e917609924582918d0185642a` |
+| Merge A | `c29e07c3bd487871d861577036edf9159fed65e4` |
+| Merge B | `3e6e55735973e4da86e3de7b046bc382b4260bb7` |
+| Recon manifests | `5e7dc6799f19b2e189e4027f920296a543779fa1` |
+| Recon reliability docs | `cf1722cfa556b309ffc33b5387557c12456896b7` |
+| Recon packaging docs | `df140502759c0d7d0a098a126742a5b3e6ca71e5` |
+| Recon live docs | `0ae11739e1663c04413eded3c03a0fa9957f561c` |
+| Gate 2.3 reports | `f7501159f84ff024f73877e3347a06f4299f2815` |
+
+Final main SHA and annotated tag are recorded after fast-forward (this pin commit intentionally omits its own hash).

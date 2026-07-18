@@ -4,9 +4,11 @@
 **Task:** `tracer-w2-webview-tooling` (W2.2-T)  
 **Branch:** `agent/tracer-w2-webview-tooling`  
 **Base SHA:** `5368c98155b12cd2c9fe3092ca6d96ce1c6ef4f5`  
+**Tooling SHA:** `37efca9b2738d7d28171b03c86d6139e60c49072`  
+**Docs body SHA:** `bd4807c842f15e4a478723311b7e0799d18992ce`  
 **Date:** 2026-07-18  
 **Host:** grok-build (Windows)  
-**Session:** see completion report  
+**Session:** `heli-ses-7d536f74-6658-412f-869a-65f3aa121d97`  
 
 ## Gate decision
 

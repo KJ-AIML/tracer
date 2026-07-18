@@ -113,6 +113,28 @@ signing: UNSIGNED_DEVELOPMENT_RC
 4. RC-02 is **process-level** smoke with fake ACP — not a full WebView product journey (W2.3-B).
 5. `tools/tauri-e2e` core reliability remains owned by W2.3-C.
 
+## Integration re-build (W2.3-I / Gate 2.3)
+
+Rebuilt on integrated tree (`integration/tracer-w2-3`) after C→A→B merges.
+
+| Item | Value |
+|---|---|
+| Command | `pnpm release:windows` then `pnpm test:release:windows -- --skip-build` |
+| Packaging result | **PASS** |
+| Signing | **UNSIGNED_DEVELOPMENT_RC** (Authenticode NotSigned) |
+| Portable | `target/release/tracer-desktop.exe` — 17198080 bytes — SHA-256 `a39c14cb3eee0caa72a950ae88ebab4e3aa8572ceec11c2e0207c2af25991ee5` |
+| NSIS | `target/release/bundle/nsis/Tracer_0.1.0_x64-setup.exe` — 4127658 bytes — SHA-256 `829e9a7e0342afa110899d827f6c5c4b8e66a414a59c5e498e6c62c0f1645314` |
+| Identity | Tracer / `dev.tracer.desktop` / `tracer-desktop` / 0.1.0 — PASS |
+| RC-01 Clean install | **PASS** |
+| RC-02 Fake-runtime smoke | **PASS** |
+| RC-03 Upgrade | **PARTIAL / FIXTURE_LIMITED** (`no_prior_fixture`; validator marks PASS with honest non-claim) |
+| RC-04 Uninstall | **PASS** |
+| RC-05 Reinstall | **PASS** |
+| RC-06 Failed launch diagnostics | **PASS** |
+| Overall RC decision | **PASS** with RC-03 fixture-limited honesty |
+
+Artifacts remain gitignored (not committed).
+
 ## Non-coverage
 
 | Area | Status |

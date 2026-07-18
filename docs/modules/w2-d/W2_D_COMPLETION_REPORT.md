@@ -185,4 +185,4 @@ Harness plumbing for observe / allow-once / reject-once / cancel-while-pending /
 | Item | SHA |
 |---|---|
 | Base | `56715cc79047d22e4c66a2a8ba257ee7b68d1f3e` |
-| Harness + docs (this delivery) | *(filled after commit)* |
+| Harness + docs (this delivery) | `205246fa83a4bcc0363b7035bafa5d132b0a0c47` (harness); `4350f05d492e5408c1afefdd855d4adf82c16966` (docs) |

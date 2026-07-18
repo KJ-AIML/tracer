@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 use crate::discovery::DiscoveryResult;
 use crate::stages::StageId;
 
-/// Overall live result classification (task contract).
+/// Overall / scenario classification (LVS + LVA task contracts).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum LiveClassification {
@@ -21,6 +21,10 @@ pub enum LiveClassification {
     Pass,
     /// Unexpected failure (not auth-block).
     Fail,
+    /// Live ran but approval reverse-request was not observed (LVA honesty).
+    NotObserved,
+    /// Provider completed without permission reverse-request for the inducing prompt (LVA).
+    UnsupportedByPrompt,
 }
 
 /// Per-stage status.
@@ -58,6 +62,16 @@ pub struct ScenarioResult {
     pub detail: String,
 }
 
+/// Which scenario suite this report covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SuiteKind {
+    /// VS1-H1 LVS-01…LVS-08 smoke.
+    Lvs,
+    /// W2-D LVA-01…LVA-07 live approval validation.
+    Lva,
+}
+
 /// Full harness report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +86,8 @@ pub struct EvidenceReport {
     pub platform: String,
     pub dry_run: bool,
     pub live_opt_in: bool,
+    /// `lvs` (default smoke) or `lva` (approval reverse-request suite).
+    pub suite: SuiteKind,
     pub discovery: Option<DiscoveryResult>,
     pub spawn_plan: Value,
     pub stages: Vec<StageEvidence>,
@@ -95,6 +111,15 @@ pub struct AssumptionCheck {
 
 impl EvidenceReport {
     pub fn new(dry_run: bool, live_opt_in: bool, platform: String) -> Self {
+        Self::new_suite(dry_run, live_opt_in, platform, SuiteKind::Lvs)
+    }
+
+    pub fn new_suite(
+        dry_run: bool,
+        live_opt_in: bool,
+        platform: String,
+        suite: SuiteKind,
+    ) -> Self {
         let now = OffsetDateTime::now_utc();
         let generated_at = format!(
             "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
@@ -105,10 +130,28 @@ impl EvidenceReport {
             now.minute(),
             now.second()
         );
+        let (work_item, notes) = match suite {
+            SuiteKind::Lvs => (
+                "VS1-H1".into(),
+                vec![
+                    "Credentials are never stored or printed by this harness.".into(),
+                    "Standard CI must not invoke `run` without opt-in env (and CI matrix forbids live).".into(),
+                ],
+            ),
+            SuiteKind::Lva => (
+                "W2-D".into(),
+                vec![
+                    "Credentials are never stored or printed by this harness.".into(),
+                    "Standard CI must not invoke approval-run without TRACER_LIVE_GROK=1.".into(),
+                    "Never auto-approve: allow/deny only via explicit LVA scenario actions.".into(),
+                    "Do not claim LVA PASS without an observed approval.requested reverse-request.".into(),
+                ],
+            ),
+        };
         Self {
             schema_version: 1,
             harness: "live-grok-smoke".into(),
-            work_item: "VS1-H1".into(),
+            work_item,
             classification_tier: "manual_local_live_authenticated_smoke".into(),
             classification: if dry_run {
                 LiveClassification::NotRun
@@ -119,15 +162,13 @@ impl EvidenceReport {
             platform,
             dry_run,
             live_opt_in,
+            suite,
             discovery: None,
             spawn_plan: json!({}),
             stages: Vec::new(),
             scenarios: Vec::new(),
             assumptions_checked: default_assumptions(),
-            notes: vec![
-                "Credentials are never stored or printed by this harness.".into(),
-                "Standard CI must not invoke `run` without opt-in env (and CI matrix forbids live).".into(),
-            ],
+            notes,
             observed_event_types: Vec::new(),
         }
     }
@@ -145,6 +186,11 @@ impl EvidenceReport {
             } else {
                 LiveClassification::NotRun
             };
+            return;
+        }
+
+        if self.suite == SuiteKind::Lva {
+            self.finalize_lva_classification();
             return;
         }
 
@@ -192,6 +238,95 @@ impl EvidenceReport {
             self.classification = LiveClassification::NotRun;
         } else {
             self.classification = LiveClassification::Partial;
+        }
+    }
+
+    /// LVA overall classification: honest about non-observation (never fabricates PASS).
+    fn finalize_lva_classification(&mut self) {
+        let status_of = |id: &str| {
+            self.scenarios
+                .iter()
+                .find(|s| s.id == id)
+                .map(|s| s.status)
+        };
+
+        if self.scenarios.iter().any(|s| s.status == LiveClassification::Fail)
+            || self.stages.iter().any(|s| s.status == StageStatus::Fail)
+        {
+            // Prefer auth block when session never authenticated.
+            if self
+                .scenarios
+                .iter()
+                .any(|s| s.status == LiveClassification::BlockedByAuth)
+                || self.stages.iter().any(|s| s.status == StageStatus::Blocked)
+            {
+                // Fail still wins if there is a true product fail; only pure auth → blocked.
+                let only_auth_or_blocked = !self.scenarios.iter().any(|s| {
+                    s.status == LiveClassification::Fail
+                        && !s.detail.to_ascii_lowercase().contains("auth")
+                }) && !self.stages.iter().any(|s| {
+                    s.status == StageStatus::Fail
+                        && s.stage_id != "discovery"
+                        && s.stage_id != "startup"
+                        && s.stage_id != "initialize"
+                });
+                if only_auth_or_blocked
+                    && self
+                        .scenarios
+                        .iter()
+                        .any(|s| s.status == LiveClassification::BlockedByAuth)
+                {
+                    self.classification = LiveClassification::BlockedByAuth;
+                    return;
+                }
+            }
+            self.classification = LiveClassification::Fail;
+            return;
+        }
+
+        if self
+            .scenarios
+            .iter()
+            .any(|s| s.status == LiveClassification::BlockedByAuth)
+            || self.stages.iter().any(|s| s.status == StageStatus::Blocked)
+        {
+            self.classification = LiveClassification::BlockedByAuth;
+            return;
+        }
+
+        let required = [
+            "LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07",
+        ];
+        let all_pass = required.iter().all(|id| {
+            status_of(id) == Some(LiveClassification::Pass)
+        });
+        if all_pass {
+            self.classification = LiveClassification::Pass;
+            return;
+        }
+
+        // Honest non-observation aggregates.
+        let any_not_observed = self
+            .scenarios
+            .iter()
+            .any(|s| s.status == LiveClassification::NotObserved);
+        let any_unsupported = self
+            .scenarios
+            .iter()
+            .any(|s| s.status == LiveClassification::UnsupportedByPrompt);
+        let any_pass = self
+            .scenarios
+            .iter()
+            .any(|s| s.status == LiveClassification::Pass);
+
+        if any_unsupported && !any_pass {
+            self.classification = LiveClassification::UnsupportedByPrompt;
+        } else if any_not_observed && !any_pass {
+            self.classification = LiveClassification::NotObserved;
+        } else if any_pass || any_not_observed || any_unsupported {
+            self.classification = LiveClassification::Partial;
+        } else {
+            self.classification = LiveClassification::NotRun;
         }
     }
 }
@@ -272,5 +407,63 @@ mod tests {
         ));
         r.finalize_classification();
         assert_eq!(r.classification, LiveClassification::NotRun);
+    }
+
+    #[test]
+    fn lva_finalize_never_pass_without_all_pass() {
+        let mut r = EvidenceReport::new_suite(false, true, "test".into(), SuiteKind::Lva);
+        for id in ["LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07"] {
+            r.scenarios.push(ScenarioResult {
+                id: id.into(),
+                status: if id == "LVA-01" {
+                    LiveClassification::NotObserved
+                } else {
+                    LiveClassification::Pass
+                },
+                detail: "unit".into(),
+            });
+        }
+        r.finalize_classification();
+        assert_ne!(r.classification, LiveClassification::Pass);
+        assert_eq!(r.classification, LiveClassification::Partial);
+    }
+
+    #[test]
+    fn lva_finalize_unsupported_when_all_unsupported() {
+        let mut r = EvidenceReport::new_suite(false, true, "test".into(), SuiteKind::Lva);
+        r.scenarios.push(ScenarioResult {
+            id: "LVA-01".into(),
+            status: LiveClassification::UnsupportedByPrompt,
+            detail: "unit".into(),
+        });
+        r.scenarios.push(ScenarioResult {
+            id: "LVA-02".into(),
+            status: LiveClassification::UnsupportedByPrompt,
+            detail: "unit".into(),
+        });
+        r.finalize_classification();
+        assert_eq!(r.classification, LiveClassification::UnsupportedByPrompt);
+    }
+
+    #[test]
+    fn lva_finalize_blocked_by_auth() {
+        let mut r = EvidenceReport::new_suite(false, true, "test".into(), SuiteKind::Lva);
+        r.push_stage(stage_evidence(
+            StageId::Session,
+            StageStatus::Blocked,
+            1,
+            vec!["BLOCKED_BY_AUTH".into()],
+            None,
+            None,
+        ));
+        for id in ["LVA-01", "LVA-02", "LVA-03", "LVA-04", "LVA-05", "LVA-06", "LVA-07"] {
+            r.scenarios.push(ScenarioResult {
+                id: id.into(),
+                status: LiveClassification::BlockedByAuth,
+                detail: "requires authenticated session".into(),
+            });
+        }
+        r.finalize_classification();
+        assert_eq!(r.classification, LiveClassification::BlockedByAuth);
     }
 }

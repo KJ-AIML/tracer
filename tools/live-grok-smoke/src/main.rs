@@ -23,6 +23,7 @@
 //! grok.com session under GROK_HOME, or provider env the stock binary reads).
 //! This tool never prints tokens and never writes secrets to evidence files.
 
+mod approval;
 mod discovery;
 mod evidence;
 mod sanitize;
@@ -36,31 +37,34 @@ use evidence::{EvidenceReport, LiveClassification};
 use stages::{run_dry_run, run_live, RunConfig, StageId};
 
 fn usage() -> &'static str {
-    r#"live-grok-smoke — manual opt-in stock Grok ACP smoke harness (VS1-H1)
+    r#"live-grok-smoke — manual opt-in stock Grok ACP smoke + approval harness
 
 USAGE:
   live-grok-smoke <COMMAND> [OPTIONS]
 
 COMMANDS:
-  dry-run       Validate spawn config / stage plan without launching Grok
-  discover      Locate grok binary + report platform/version (no ACP session)
-  run           Execute live stages (requires TRACER_LIVE_GROK=1)
-  help          Show this help
+  dry-run           Validate LVS spawn config / stage plan without launching Grok
+  discover          Locate grok binary + report platform/version (no ACP session)
+  run               Execute live LVS stages (requires TRACER_LIVE_GROK=1)
+  approval-dry-run  Validate LVA approval suite plan without launching Grok (W2-D)
+  approval-run      Live LVA-01..LVA-07 approval reverse-request suite
+                    (requires TRACER_LIVE_GROK=1)
+  help              Show this help
 
-OPTIONS (run / dry-run):
-  --through <stage>     Stop after stage (discovery|startup|initialize|
+OPTIONS (run / dry-run / approval-*):
+  --through <stage>     Stop after stage (LVS only; discovery|startup|initialize|
                         auth_requirement|session|prompt|stream|
                         approval|cancel|shutdown). Default: full plan.
-  --scenarios <list>    Comma-separated LVS-01..LVS-08 (default: all applicable)
+  --scenarios <list>    Comma-separated LVS-01..LVS-08 or LVA-01..LVA-07
   --cwd <path>          Project cwd for session/new (default: repo root guess)
   --grok <path>         Explicit grok executable (else TRACER_GROK_BIN / PATH)
-  --prompt <text>       Public-safe prompt text (default: fixed public phrase)
+  --prompt <text>       Public-safe prompt text (LVA default induces tool use)
   --out <path>          Write sanitized JSON evidence to path
   --allow-unauth        Continue through auth-gated stages as BLOCKED_BY_AUTH
                         without treating the overall run as FAIL
 
 ENV:
-  TRACER_LIVE_GROK=1    Required for `run` (provider / stock binary usage)
+  TRACER_LIVE_GROK=1    Required for `run` / `approval-run`
   TRACER_LIVE_SMOKE=1   Accepted alias of TRACER_LIVE_GROK
   TRACER_GROK_BIN       Optional absolute/relative path to grok
   GROK_HOME             Optional hermetic Grok home (recommended for probes)
@@ -69,7 +73,9 @@ SAFETY:
   - Never part of standard CI
   - Never commits credentials or private prompts
   - Evidence is sanitized (tokens redacted)
-  - Dry-run never spawns Grok
+  - Dry-run / approval-dry-run never spawn Grok agent stdio
+  - Never auto-approve without explicit LVA scenario action
+  - Never claim LVA PASS without observed approval.requested
 "#
 }
 
@@ -90,6 +96,8 @@ enum Command {
     DryRun,
     Discover,
     Run,
+    ApprovalDryRun,
+    ApprovalRun,
     Help,
 }
 
@@ -130,6 +138,8 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
         Some("dry-run") => Command::DryRun,
         Some("discover") => Command::Discover,
         Some("run") => Command::Run,
+        Some("approval-dry-run") => Command::ApprovalDryRun,
+        Some("approval-run") => Command::ApprovalRun,
         Some("help") | Some("-h") | Some("--help") => Command::Help,
         Some(other) => return Err(format!("unknown command '{other}'")),
         None => Command::Help,
@@ -252,6 +262,30 @@ fn execute(cli: Cli) -> Result<ExitCode, String> {
             print_and_write(&report, cli.out.as_ref())?;
             Ok(exit_for_classification(report.classification))
         }
+        Command::ApprovalDryRun => {
+            let cfg = build_config(&cli, /*live*/ false)?;
+            let report = approval::run_approval_dry_run(&cfg)?;
+            print_and_write(&report, cli.out.as_ref())?;
+            Ok(exit_for_classification(report.classification))
+        }
+        Command::ApprovalRun => {
+            if !live_opt_in() {
+                return Err(
+                    "live `approval-run` requires TRACER_LIVE_GROK=1 (or TRACER_LIVE_SMOKE=1). \
+                     Use `approval-dry-run` without the flag."
+                        .into(),
+                );
+            }
+            eprintln!(
+                "live-grok-smoke: TRACER_LIVE_GROK opt-in detected — approval suite may \
+                 spawn stock Grok, induce tool permission reverse-requests, and consume \
+                 provider usage. Never auto-approves without LVA scenario action."
+            );
+            let cfg = build_config(&cli, /*live*/ true)?;
+            let report = approval::run_approval_live(&cfg)?;
+            print_and_write(&report, cli.out.as_ref())?;
+            Ok(exit_for_classification(report.classification))
+        }
     }
 }
 
@@ -356,9 +390,11 @@ fn print_and_write(report: &EvidenceReport, out: Option<&PathBuf>) -> Result<(),
 
 fn exit_for_classification(c: LiveClassification) -> ExitCode {
     match c {
-        LiveClassification::Pass | LiveClassification::NotRun | LiveClassification::Partial => {
-            ExitCode::SUCCESS
-        }
+        LiveClassification::Pass
+        | LiveClassification::NotRun
+        | LiveClassification::Partial
+        | LiveClassification::NotObserved
+        | LiveClassification::UnsupportedByPrompt => ExitCode::SUCCESS,
         // BLOCKED_BY_AUTH is not a product failure — operator must authenticate.
         LiveClassification::BlockedByAuth => ExitCode::SUCCESS,
         LiveClassification::Fail => ExitCode::from(1),
@@ -399,6 +435,23 @@ mod tests {
     }
 
     #[test]
+    fn parses_approval_commands() {
+        let dry = parse_args(vec!["approval-dry-run".into()]).expect("parse");
+        assert_eq!(dry.command, Command::ApprovalDryRun);
+        let live = parse_args(vec![
+            "approval-run".into(),
+            "--scenarios".into(),
+            "LVA-01,LVA-04".into(),
+        ])
+        .expect("parse");
+        assert_eq!(live.command, Command::ApprovalRun);
+        assert_eq!(
+            live.scenarios.as_ref().unwrap(),
+            &vec!["LVA-01".to_string(), "LVA-04".to_string()]
+        );
+    }
+
+    #[test]
     fn sensitive_prompt_rejected() {
         assert!(prompt_looks_sensitive("here is my api_key=sk-test"));
         assert!(!prompt_looks_sensitive(stages::DEFAULT_PUBLIC_PROMPT));
@@ -408,6 +461,14 @@ mod tests {
     fn classification_exit_codes() {
         assert_eq!(
             exit_for_classification(LiveClassification::BlockedByAuth),
+            ExitCode::SUCCESS
+        );
+        assert_eq!(
+            exit_for_classification(LiveClassification::NotObserved),
+            ExitCode::SUCCESS
+        );
+        assert_eq!(
+            exit_for_classification(LiveClassification::UnsupportedByPrompt),
             ExitCode::SUCCESS
         );
         assert_eq!(

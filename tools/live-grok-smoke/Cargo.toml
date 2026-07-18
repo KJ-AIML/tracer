@@ -2,7 +2,7 @@
 name = "live-grok-smoke"
 version = "0.1.0"
 edition.workspace = true
-description = "Manual opt-in live Grok stock runtime smoke harness (VS1-H1)"
+description = "Manual opt-in live Grok stock runtime smoke + approval (LVA) harness (VS1-H1 / W2-D)"
 license.workspace = true
 rust-version.workspace = true
 publish.workspace = true

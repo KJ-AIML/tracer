@@ -4,6 +4,7 @@
 **Work item:** W2-B — Real Tauri GUI E2E  
 **Branch:** `agent/tracer-w2-tauri-gui-e2e`  
 **Base SHA:** `56715cc79047d22e4c66a2a8ba257ee7b68d1f3e`  
+**Head SHA:** `02fc0c4` (this report); deliverables `639db16`..`87f8629`  
 **Session id:** `heli-ses-c1dbf8c3-34de-4440-a25b-5c84a56fda52`  
 **Host:** grok-build  
 **Target:** tracer  
@@ -166,7 +167,7 @@ Follow-up path is documented in architecture §3 / tools README. **Do not treat 
 | `fe60017` | boundary journey + invoke policy tests |
 | `9976f9b` | tools/tauri-e2e harness + e2e entry README |
 | `87f8629` | docs/modules/w2-b architecture, matrix, completion |
-| head | this report SHA table (follow-up amend/docs pin) |
+| `087cb0c` | completion report SHA table pin |
 
 ## Lease
 

@@ -127,14 +127,16 @@ cargo test -p tracer-control-plane --test vs_scenarios -- --test-threads=1
 
 ## Commit SHAs
 
-(Filled after local commits — see git log on branch.)
+Head: `9a75cad` (docs tip; updated with SHA table below).
 
 | Commit | Summary |
 |---|---|
-| _pending_ | feat(w2-a): presentation hub + plane/runtime wiring |
-| _pending_ | test(w2-a): presentation delivery invariants |
-| _pending_ | docs(w2-a): architecture, test matrix, completion report |
+| `c16e63d` | feat(w2-a): bounded presentation hub with coalescing notify |
+| `5ab42e0` | test(w2-a): prove presentation delivery invariants |
+| `9a75cad` / tip | docs(w2-a): architecture, test matrix, completion report |
 
 ## Lease
 
 Write lease acquired via takeover; released after delivery commits (see session activity).
+
+

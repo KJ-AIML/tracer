@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "tracer-release-provenance",
+  "required": [
+    "product",
+    "version",
+    "sourceSha",
+    "platform",
+    "artifacts",
+    "signing",
+    "buildToolchain"
+  ],
+  "artifactFields": [
+    "artifactType",
+    "filename",
+    "relativePath",
+    "sizeBytes",
+    "sha256"
+  ],
+  "note": "Binaries are never committed; this file documents the schema only."
+}

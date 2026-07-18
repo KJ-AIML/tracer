@@ -23,9 +23,12 @@ export const CANONICAL = Object.freeze({
   identifier: "dev.tracer.desktop",
   mainBinaryName: "tracer-desktop",
   exeWindows: "tracer-desktop.exe",
-  version: "0.1.0",
+  /** Expected semver is read from tauri.conf.json (not hard-coded). */
+  version: null,
   /** Windows app-data root (Tauri identifier → LocalAppData). */
   appDataWindowsTemplate: "%LOCALAPPDATA%\\dev.tracer.desktop",
+  /** Isolated upgrade-fixture logical id (tests only; never collides with operator DB). */
+  upgradeFixtureIdentifier: "dev.tracer.desktop.upgrade-fixture",
   /** Storage relative path when control plane uses platform app-data root. */
   storageRelative: "tracer\\tracer.db",
 });
@@ -61,6 +64,7 @@ export function checkIdentity() {
   const cargoText = readFileSync(CARGO_TOML, "utf8");
   const cargoVersion = parseCargoVersion(cargoText);
   const cargoName = parseCargoName(cargoText);
+  const expectedVersion = conf.version;
 
   const expect = (id, actual, expected, note) => {
     const pass = actual === expected;
@@ -82,10 +86,19 @@ export function checkIdentity() {
     CANONICAL.mainBinaryName,
     "stable exe stem; keeps L2/L3 harness names stable",
   );
-  expect("version.tauri", conf.version, CANONICAL.version);
-  expect("version.package.json", pkg.version, CANONICAL.version);
-  expect("version.Cargo.toml", cargoVersion, CANONICAL.version);
+  expect("version.tauri", conf.version, expectedVersion);
+  expect("version.package.json", pkg.version, expectedVersion);
+  expect("version.Cargo.toml", cargoVersion, expectedVersion);
   expect("cargo.package.name", cargoName, "tracer-desktop");
+  if (!expectedVersion || !/^\d+\.\d+\.\d+/.test(String(expectedVersion))) {
+    ok = false;
+    checks.push({
+      id: "version.semver_shape",
+      status: "fail",
+      actual: expectedVersion,
+      expected: "MAJOR.MINOR.PATCH",
+    });
+  }
 
   // Bundle posture for Windows RC
   const bundle = conf.bundle || {};
@@ -146,10 +159,11 @@ export function checkIdentity() {
 
   return {
     ok,
-    version: CANONICAL.version,
+    version: expectedVersion,
     checks,
     identity: {
       ...CANONICAL,
+      version: expectedVersion,
       resolved: {
         productName: conf.productName,
         identifier: conf.identifier,

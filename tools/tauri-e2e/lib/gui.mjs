@@ -1,6 +1,13 @@
 /**
- * L3-J GUI interaction helpers — selector priority:
- * role+name → form label → data-testid="tracer-…" → state marker → CSS last resort.
+ * L3-J GUI interaction helpers - selector priority (product + harness):
+ * 1. role + accessible name (preferred when a11y locators are reliable)
+ * 2. form label / htmlFor association (product markup exposes labelled fields)
+ * 3. data-testid="tracer-*" (primary automation hook; stable product contract)
+ * 4. state marker attributes (data-tracer-ready, data-session-status, ...)
+ * 5. CSS last resort (avoid in journeys)
+ *
+ * Journeys use testids for WebView2 determinism; product controls retain
+ * visible labels, roles, and aria-* for accessibility.
  */
 
 import { setTimeout as delay } from "node:timers/promises";
@@ -158,6 +165,66 @@ export async function waitForScript(client, script, opts = {}) {
   throw new Error(`waitForScript timeout; last=${JSON.stringify(last)}`);
 }
 
+
+/**
+ * Type into an input associated with a visible label (htmlFor / wrapping label).
+ * Falls back to data-testid.
+ */
+export async function typeByLabel(client, labelText, text, fallbackTestId, opts = {}) {
+  const res = await client.execute(
+    `var labelText = arguments[0], value = arguments[1];
+     var labels = document.querySelectorAll('label');
+     for (var i = 0; i < labels.length; i++) {
+       var lab = labels[i];
+       var t = (lab.innerText || lab.textContent || '').replace(/\s+/g, ' ').trim();
+       if (t.indexOf(labelText) !== 0 && t !== labelText && t.indexOf(labelText) === -1) continue;
+       var input = lab.querySelector('input,textarea,select');
+       if (!input && lab.htmlFor) input = document.getElementById(lab.htmlFor);
+       if (!input) continue;
+       input.focus();
+       var proto = input.tagName === 'TEXTAREA'
+         ? window.HTMLTextAreaElement.prototype
+         : window.HTMLInputElement.prototype;
+       var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+       if (desc && desc.set) desc.set.call(input, value);
+       else input.value = value;
+       input.dispatchEvent(new Event('input', { bubbles: true }));
+       input.dispatchEvent(new Event('change', { bubbles: true }));
+       return { ok: true, via: 'label' };
+     }
+     return { ok: false };`,
+    [labelText, String(text)],
+  );
+  if (res.body?.value?.ok) return res.body.value;
+  if (fallbackTestId) {
+    await typeTestId(client, fallbackTestId, text, opts);
+    return { ok: true, via: "testid", testId: fallbackTestId };
+  }
+  throw new Error(`typeByLabel(${labelText}) failed`);
+}
+
+/**
+ * Click by role/name or button text; falls back to data-testid.
+ */
+export async function clickByRoleName(client, role, name, fallbackTestId, opts = {}) {
+  const res = await client.execute(
+    `var name = arguments[0];
+     var btns = document.querySelectorAll('button,[role="button"]');
+     for (var i = 0; i < btns.length; i++) {
+       var t = (btns[i].innerText || btns[i].getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
+       if (t === name || t.indexOf(name) === 0) { btns[i].click(); return { ok: true, via: 'role-name' }; }
+     }
+     return { ok: false };`,
+    [name],
+  );
+  if (res.body?.value?.ok) return res.body.value;
+  if (fallbackTestId) {
+    await clickTestId(client, fallbackTestId, opts);
+    return { ok: true, via: "testid", testId: fallbackTestId };
+  }
+  throw new Error(`clickByRoleName(${role},${name}) failed`);
+}
+
 /**
  * Wait for app ready marker (DOM).
  * @param {WebDriverClient} client
@@ -181,9 +248,10 @@ export async function guiRegisterProject(client, args) {
     await clickTestId(client, "tracer-nav-projects");
     await waitForTestId(client, "tracer-projects-home");
   }
-  await typeTestId(client, "tracer-project-root-path", args.rootPath);
+  // Label-first, testid fallback (priority 2 → 3).
+  await typeByLabel(client, "Project root path", args.rootPath, "tracer-project-root-path");
   if (args.name) {
-    await typeTestId(client, "tracer-project-name", args.name);
+    await typeByLabel(client, "Display name", args.name, "tracer-project-name");
   }
   await clickTestId(client, "tracer-project-register-submit");
   await waitForTestId(client, "tracer-project-workspace", { timeoutMs: 45_000 });
@@ -195,7 +263,7 @@ export async function guiRegisterProject(client, args) {
 export async function guiCreateSession(client, args = {}) {
   await waitForTestId(client, "tracer-project-workspace", { timeoutMs: 20_000 });
   if (args.title) {
-    await typeTestId(client, "tracer-session-title", args.title);
+    await typeByLabel(client, "Session title", args.title, "tracer-session-title");
   }
   if (args.scenarioId) {
     await selectTestId(client, "tracer-session-scenario", args.scenarioId);
@@ -208,8 +276,8 @@ export async function guiCreateSession(client, args = {}) {
 }
 
 export async function guiSubmitPrompt(client, text) {
-  await typeTestId(client, "tracer-prompt-input", text);
-  await clickTestId(client, "tracer-prompt-send");
+  await typeByLabel(client, "Prompt", text, "tracer-prompt-input");
+  await clickByRoleName(client, "button", "Send", "tracer-prompt-send");
 }
 
 export async function guiRefreshSession(client) {

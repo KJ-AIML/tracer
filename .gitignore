@@ -48,3 +48,8 @@ Thumbs.db
 
 # NOTE: Do not ignore fixtures, migrations, contracts, reports, or tests.
 # Root Cargo.lock and pnpm-lock.yaml are tracked by the workspace owner.
+
+# Integration/local validation outputs (do not commit binaries or run logs)
+artifacts/
+target/release-rc/
+

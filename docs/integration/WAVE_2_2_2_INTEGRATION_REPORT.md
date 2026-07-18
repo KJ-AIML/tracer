@@ -82,7 +82,7 @@ Merge strategy: `git merge --no-ff` (`ort`) — worker provenance retained.
 
 | SHA | Message |
 |---|---|
-| _(docs commit — recorded after this report lands)_ | `docs(w2.2.2): Gate 2.2.2 integration reports and contracts` |
+| `7d70e37a979ec652059b59ad9933e3c87569a16c` | `docs(w2.2.2): Gate 2.2.2 integration reports and contracts` |
 
 No root package script or lockfile fix commits required — merge applied cleanly against Gate 2.2.1 root scripts.
 
@@ -208,5 +208,5 @@ See `docs/integration/W2_2_B_LAUNCH_AUTHORIZATION_FINAL.md`.
 | W2.2-T docs body | `bd4807c842f15e4a478723311b7e0799d18992ce` |
 | W2.2-T pin tip | `168ee700d00e6eb3a4a51cb2f4a47a820e817bed` |
 | merge tooling | `0da9ffc5d34ac43636c1ceba79fe88b0a0d3f30a` |
-| docs gate artifacts | _(filled after docs commit)_ |
+| docs gate artifacts | `7d70e37a979ec652059b59ad9933e3c87569a16c` |
 | main after FF | _(filled after FF)_ |

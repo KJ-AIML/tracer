@@ -259,7 +259,9 @@ TRACER_NODE_BIN=node
             ]
         );
         assert_eq!(pairs[1].1, "/tmp/fake.js");
-        assert!(!pairs.iter().any(|(k, _)| k == "PATH" || k == "API_KEY" || k == "HOME"));
+        assert!(!pairs
+            .iter()
+            .any(|(k, _)| k == "PATH" || k == "API_KEY" || k == "HOME"));
     }
 
     #[test]

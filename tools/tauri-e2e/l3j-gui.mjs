@@ -193,16 +193,26 @@ async function main() {
   /** @type {import('./lib/journeys.mjs').JOURNEY_RUNNERS[0] extends never ? any : any[]} */
   const journeyResults = [];
 
+  function sanitizeArtifactText(text) {
+    if (!text) return text;
+    return String(text)
+      .replace(/(Authorization:\s*)(Bearer\s+)?[^\s"']+/gi, "$1$2[REDACTED]")
+      .replace(/(api[_-]?key|token|secret|password|credential)\s*[:=]\s*[^\s"']+/gi, "$1=[REDACTED]")
+      .replace(/([A-Za-z]:\\Users\\)[^\\"']+/g, "$1[USER]")
+      .replace(/(\/Users\/)[^\/"']+/g, "$1[USER]");
+  }
+
   async function captureArtifact(label) {
     const dir = path.join(artifactsDir, label);
     mkdirSync(dir, { recursive: true });
     try {
       const src = await client.getPageSource();
-      writeFileSync(path.join(dir, "page.html"), src.raw || JSON.stringify(src.body), "utf8");
+      const body = sanitizeArtifactText(src.raw || JSON.stringify(src.body));
+      writeFileSync(path.join(dir, "page.html"), body, "utf8");
     } catch (e) {
       writeFileSync(
         path.join(dir, "page-error.txt"),
-        e instanceof Error ? e.message : String(e),
+        sanitizeArtifactText(e instanceof Error ? e.message : String(e)),
         "utf8",
       );
     }

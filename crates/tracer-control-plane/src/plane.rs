@@ -443,7 +443,7 @@ impl ControlPlane {
         let caps = match init {
             Ok(c) => c,
             Err(e) => {
-                live.stop_ingestor();
+                live.stop_ingestor_async().await;
                 let _ = adapter.shutdown(ShutdownOptions::default());
                 let _ = self
                     .storage
@@ -646,9 +646,10 @@ impl ControlPlane {
         {
             let mut st = live.state.lock().expect("state");
             st.status = SessionStatus::Running;
-            st.prompt_in_flight = true;
             st.last_prompt_id = Some(prompt_id.clone());
             st.last_agent_run_id = Some(agent_run_id.clone());
+            // Clears prior-run sticky terminal flags; ingestion stays active.
+            st.begin_prompt_cycle();
         }
         let _ = self
             .storage
@@ -685,7 +686,13 @@ impl ControlPlane {
         .await
         .map_err(|e| ControlPlaneError::internal(format!("prompt join: {e}")))?;
 
-        // Allow ingestor to flush terminal events.
+        // Adapter operation returned — ingestion / late-drain remain active.
+        {
+            let mut st = live.state.lock().expect("state");
+            st.mark_adapter_operation_returned();
+        }
+
+        // Allow ingestor to flush terminal events (does not end the drain).
         tokio::time::sleep(Duration::from_millis(250)).await;
 
         match result {
@@ -695,7 +702,7 @@ impl ControlPlane {
                     tokio::time::sleep(Duration::from_millis(30)).await;
                     let done = {
                         let st = live.state.lock().expect("state");
-                        !st.prompt_in_flight
+                        !st.prompt_in_flight || st.terminal_persisted
                     };
                     if done {
                         break;
@@ -851,7 +858,8 @@ impl ControlPlane {
         force: bool,
     ) -> ControlPlaneResult<serde_json::Value> {
         let live = self.live(session_id)?;
-        live.stop_ingestor();
+        // Join drain + pump so late terminal events finish before process stop.
+        live.stop_ingestor_async().await;
         let adapter = Arc::clone(&live.adapter);
         let res = tokio::task::spawn_blocking(move || {
             if force {

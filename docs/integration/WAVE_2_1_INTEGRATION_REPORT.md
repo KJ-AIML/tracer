@@ -136,6 +136,6 @@ See `docs/integration/WAVE_2_2_ENTRY_CRITERIA.md`. **No Wave 2.2 tasks created o
 
 | Item | Value |
 |---|---|
-| Integration HEAD | `57c534750d22f3abb061a2c14df5b94364fa683f` |
+| Integration / main tip | `7be64d47dd8e4d1a16b3d0b7b2f315c25266e699` |
 | Local tag (on PASS finalize) | `tracer-wave2.1-runtime-polish` |
 | Remote push | **none** |

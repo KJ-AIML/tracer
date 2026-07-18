@@ -39,11 +39,16 @@ pub mod convert;
 pub mod error;
 pub mod heli_bridge;
 pub mod plane;
+pub mod presentation;
 pub mod session_runtime;
 pub mod types;
 
 pub use error::{CommandError, ControlPlaneError, ControlPlaneResult};
 pub use heli_bridge::probe_heli;
 pub use plane::{ControlPlane, ControlPlaneConfig};
+pub use presentation::{
+    PresentationHub, PresentationMetricsSnapshot, PresentationSubscription, SessionProjectionInput,
+    DEFAULT_NOTIFY_CAPACITY,
+};
 pub use session_runtime::{IngestMetrics, IngestMetricsSnapshot, BRIDGE_CAPACITY};
 pub use types::*;

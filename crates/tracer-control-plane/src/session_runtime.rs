@@ -2,20 +2,22 @@
 //!
 //! # Concurrency / drain strategy
 //!
-//! Adapter event channel is **unbounded** (W1-D). W1-F mitigation path:
+//! Adapter event channel is **unbounded** (W1-D). W1-F / W2-A mitigation path:
 //!
 //! ```text
 //! adapter unbounded receiver
 //!     -> OS drain thread (continuous)
 //!     -> bounded tokio mpsc handoff (BRIDGE_CAPACITY)
 //!     -> async persist pump -> SqliteStorage::append_event
-//!     -> optional presentation fan-out (after persist)
+//!     -> update canonical presentation projection (W2-A hub)
+//!     -> bounded / coalescing notification (revision signal)
 //! ```
 //!
 //! Bounded handoff applies backpressure when SQLite is slow so W1-F does not
 //! add a second unbounded buffer. Drain uses `Sender::blocking_send` (Tokio)
 //! so the async pump never blocks a worker on `std::mpsc::recv`. Presentation
-//! is post-persist and must not block the adapter channel indefinitely.
+//! is post-persist, never blocks the persist path on slow consumers, and does
+//! not retain every intermediate notification indefinitely.
 //!
 //! This split avoids `Handle::block_on` deadlocks while keeping ingestion
 //! alive during blocking `submit_prompt`, pending approval, and cancel. No
@@ -23,7 +25,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver as StdReceiver, Sender as StdSender};
+use std::sync::mpsc::{self, Receiver as StdReceiver};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -43,7 +45,8 @@ use crate::convert::{
     approval_id_from_payload, envelope_to_event_record, pending_from_payload,
     status_hint_from_event_type,
 };
-use crate::types::{PendingApprovalView, PresentationEvent};
+use crate::presentation::{PresentationHub, SessionProjectionInput};
+use crate::types::PendingApprovalView;
 
 /// Bounded internal handoff between OS drain and async persist pump.
 /// Keeps adapter drain continuous while preventing unbounded->unbounded growth.
@@ -68,9 +71,9 @@ pub struct IngestMetrics {
     pub events_duplicate: AtomicU64,
     /// Persist failures (non-duplicate).
     pub persist_errors: AtomicU64,
-    /// Presentation fan-out send attempts after successful persist.
+    /// Presentation hub publish attempts after successful persist.
     pub presentation_sends: AtomicU64,
-    /// Presentation fan-out send failures (disconnected consumer).
+    /// Presentation publish skipped (hub shutdown / absent). Kept for metric shape.
     pub presentation_send_failures: AtomicU64,
 }
 
@@ -174,7 +177,8 @@ pub struct LiveSession {
     stop_ingest: Arc<AtomicBool>,
     drain_join: Mutex<Option<JoinHandle<()>>>,
     pump_abort: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    pub event_fanout: Arc<Mutex<Option<StdSender<PresentationEvent>>>>,
+    /// Shared presentation hub (W2-A). Optional only before `start_ingestor`.
+    pub presentation: Arc<Mutex<Option<PresentationHub>>>,
 }
 
 impl LiveSession {
@@ -192,18 +196,18 @@ impl LiveSession {
             stop_ingest: Arc::new(AtomicBool::new(false)),
             drain_join: Mutex::new(None),
             pump_abort: Mutex::new(None),
-            event_fanout: Arc::new(Mutex::new(None)),
+            presentation: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Start continuous event drain into storage.
-    pub fn start_ingestor(
-        &self,
-        storage: SqliteStorage,
-        presentation_tx: Option<StdSender<PresentationEvent>>,
-    ) {
-        if let Some(tx) = presentation_tx {
-            *self.event_fanout.lock().expect("fanout") = Some(tx);
+    ///
+    /// `presentation` is the control-plane hub (shared). After each successful
+    /// persist the pump updates the canonical projection and emits a coalesced
+    /// notification; it never blocks on consumer drain.
+    pub fn start_ingestor(&self, storage: SqliteStorage, presentation: Option<PresentationHub>) {
+        if let Some(hub) = presentation {
+            *self.presentation.lock().expect("presentation") = Some(hub);
         }
 
         let adapter_rx = match self.adapter.take_event_receiver() {
@@ -229,19 +233,21 @@ impl LiveSession {
         *self.drain_join.lock().expect("join") = Some(drain);
 
         let state = Arc::clone(&self.state);
-        let fanout = Arc::clone(&self.event_fanout);
+        let presentation = Arc::clone(&self.presentation);
         let adapter = Arc::clone(&self.adapter);
         let stop2 = Arc::clone(&self.stop_ingest);
         let storage = storage.clone();
         let metrics_pump = Arc::clone(&self.metrics);
+        let project_id = self.project_id;
         let pump = tokio::spawn(async move {
             async_persist_pump(
                 bridge_rx,
                 stop2,
                 state,
                 sid,
+                project_id,
                 storage,
-                fanout,
+                presentation,
                 adapter,
                 metrics_pump,
             )
@@ -348,8 +354,9 @@ async fn async_persist_pump(
     stop: Arc<AtomicBool>,
     state: Arc<Mutex<SessionRuntimeState>>,
     session_id: SessionId,
+    project_id: tracer_storage::ProjectId,
     storage: SqliteStorage,
-    fanout: Arc<Mutex<Option<StdSender<PresentationEvent>>>>,
+    presentation: Arc<Mutex<Option<PresentationHub>>>,
     adapter: Arc<RuntimeAdapter>,
     metrics: Arc<IngestMetrics>,
 ) {
@@ -360,10 +367,30 @@ async fn async_persist_pump(
             maybe = rx.recv() => {
                 match maybe {
                     Some(ev) => {
-                        persist_one(&ev, &state, session_id, &storage, &fanout, &adapter, &metrics).await;
+                        persist_one(
+                            &ev,
+                            &state,
+                            session_id,
+                            project_id,
+                            &storage,
+                            &presentation,
+                            &adapter,
+                            &metrics,
+                        )
+                        .await;
                         // Drain any already-queued events without yielding extra.
                         while let Ok(ev) = rx.try_recv() {
-                            persist_one(&ev, &state, session_id, &storage, &fanout, &adapter, &metrics).await;
+                            persist_one(
+                                &ev,
+                                &state,
+                                session_id,
+                                project_id,
+                                &storage,
+                                &presentation,
+                                &adapter,
+                                &metrics,
+                            )
+                            .await;
                         }
                     }
                     None => break,
@@ -372,7 +399,17 @@ async fn async_persist_pump(
             _ = tokio::time::sleep(Duration::from_millis(50)), if stop.load(Ordering::SeqCst) => {
                 // Stop requested: finish remaining then exit.
                 while let Ok(ev) = rx.try_recv() {
-                    persist_one(&ev, &state, session_id, &storage, &fanout, &adapter, &metrics).await;
+                    persist_one(
+                        &ev,
+                        &state,
+                        session_id,
+                        project_id,
+                        &storage,
+                        &presentation,
+                        &adapter,
+                        &metrics,
+                    )
+                    .await;
                 }
                 if rx.is_empty() {
                     break;
@@ -387,8 +424,9 @@ async fn persist_one(
     ev: &AdapterEvent,
     state: &Arc<Mutex<SessionRuntimeState>>,
     session_id: SessionId,
+    project_id: tracer_storage::ProjectId,
     storage: &SqliteStorage,
-    fanout: &Arc<Mutex<Option<StdSender<PresentationEvent>>>>,
+    presentation: &Arc<Mutex<Option<PresentationHub>>>,
     adapter: &RuntimeAdapter,
     metrics: &IngestMetrics,
 ) {
@@ -418,7 +456,6 @@ async fn persist_one(
             match storage.append_event(record).await {
                 Ok(stored) => {
                     metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
-                    let envelope_json = stored.to_envelope_json();
                     let seq = stored.sequence;
                     {
                         let mut st = state.lock().expect("state");
@@ -432,22 +469,14 @@ async fn persist_one(
                         );
                         st.auth_state = adapter.auth_state();
                     }
-                    if let Ok(g) = fanout.lock() {
-                        if let Some(tx) = g.as_ref() {
-                            metrics.presentation_sends.fetch_add(1, Ordering::Relaxed);
-                            if tx
-                                .send(PresentationEvent {
-                                    batch: false,
-                                    events: vec![envelope_json],
-                                })
-                                .is_err()
-                            {
-                                metrics
-                                    .presentation_send_failures
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
-                        }
-                    }
+                    publish_presentation(
+                        presentation,
+                        state,
+                        session_id,
+                        project_id,
+                        adapter,
+                        metrics,
+                    );
                     let status_now = state.lock().expect("state").status;
                     let _ = storage.update_session_status(&session_id, status_now).await;
                 }
@@ -465,7 +494,6 @@ async fn persist_one(
                     match storage.append_event(retry).await {
                         Ok(stored) => {
                             metrics.events_persisted.fetch_add(1, Ordering::Relaxed);
-                            let envelope_json = stored.to_envelope_json();
                             let seq = stored.sequence;
                             {
                                 let mut st = state.lock().expect("state");
@@ -479,22 +507,14 @@ async fn persist_one(
                                 );
                                 st.auth_state = adapter.auth_state();
                             }
-                            if let Ok(g) = fanout.lock() {
-                                if let Some(tx) = g.as_ref() {
-                                    metrics.presentation_sends.fetch_add(1, Ordering::Relaxed);
-                                    if tx
-                                        .send(PresentationEvent {
-                                            batch: false,
-                                            events: vec![envelope_json],
-                                        })
-                                        .is_err()
-                                    {
-                                        metrics
-                                            .presentation_send_failures
-                                            .fetch_add(1, Ordering::Relaxed);
-                                    }
-                                }
-                            }
+                            publish_presentation(
+                                presentation,
+                                state,
+                                session_id,
+                                project_id,
+                                adapter,
+                                metrics,
+                            );
                             let status_now = state.lock().expect("state").status;
                             let _ = storage.update_session_status(&session_id, status_now).await;
                         }
@@ -542,6 +562,47 @@ async fn persist_one(
             }
         }
     }
+}
+
+/// Post-persist presentation publish: projection update + coalesced notify.
+/// Never blocks on consumers; never queues full event history.
+fn publish_presentation(
+    presentation: &Arc<Mutex<Option<PresentationHub>>>,
+    state: &Arc<Mutex<SessionRuntimeState>>,
+    session_id: SessionId,
+    project_id: tracer_storage::ProjectId,
+    adapter: &RuntimeAdapter,
+    metrics: &IngestMetrics,
+) {
+    let hub = match presentation.lock().expect("presentation").clone() {
+        Some(h) => h,
+        None => return,
+    };
+    if hub.is_shutdown() {
+        metrics
+            .presentation_send_failures
+            .fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+    let input = {
+        let st = state.lock().expect("state");
+        SessionProjectionInput {
+            session_id: session_id.to_string(),
+            project_id: project_id.to_string(),
+            status: st.status,
+            auth_state: st.auth_state,
+            pending_approvals: st.pending_approvals.values().cloned().collect(),
+            last_error: st.last_error.clone(),
+            capabilities: st.capabilities.clone(),
+            latest_sequence: st.latest_sequence,
+            prompt_in_flight: st.prompt_in_flight,
+            process_alive: adapter.is_process_alive(),
+            protocol_ready: adapter.is_protocol_ready(),
+            session_ready: adapter.is_session_ready(),
+        }
+    };
+    metrics.presentation_sends.fetch_add(1, Ordering::Relaxed);
+    let _ = hub.publish_session_update(input);
 }
 
 fn apply_event_to_state(

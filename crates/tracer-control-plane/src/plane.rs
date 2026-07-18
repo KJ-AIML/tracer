@@ -30,6 +30,7 @@ use tracing::info;
 use crate::convert::{error_payload, runtime_observation};
 use crate::error::{ControlPlaneError, ControlPlaneResult};
 use crate::heli_bridge::probe_heli;
+use crate::presentation::{PresentationHub, PresentationSubscription, SessionProjectionInput};
 use crate::session_runtime::{
     cancel_with_escalation, resolve_approval_blocking, submit_prompt_blocking, LiveSession,
 };
@@ -72,10 +73,8 @@ pub struct ControlPlane {
     config: ControlPlaneConfig,
     /// Live sessions keyed by Tracer session id string.
     sessions: Mutex<HashMap<String, Arc<LiveSession>>>,
-    /// Presentation fan-out (optional).
-    presentation_tx: Mutex<Option<Sender<PresentationEvent>>>,
-    /// Cached presentation snapshot.
-    snapshot: Mutex<PresentationSnapshot>,
+    /// W2-A bounded presentation hub (canonical projection + coalescing notify).
+    presentation: PresentationHub,
 }
 
 impl ControlPlane {
@@ -113,8 +112,7 @@ impl ControlPlane {
             storage,
             config,
             sessions: Mutex::new(HashMap::new()),
-            presentation_tx: Mutex::new(None),
-            snapshot: Mutex::new(snapshot),
+            presentation: PresentationHub::new(snapshot),
         })
     }
 
@@ -123,22 +121,46 @@ impl ControlPlane {
         &self.storage
     }
 
-    /// Subscribe presentation fan-out (UI / tests).
-    pub fn set_presentation_sender(&self, tx: Sender<PresentationEvent>) {
-        *self.presentation_tx.lock().expect("tx") = Some(tx);
+    /// W2-A presentation hub (tests / multi-consumer subscribe).
+    pub fn presentation_hub(&self) -> &PresentationHub {
+        &self.presentation
     }
 
-    /// Current presentation snapshot (versioned; shell-restorable).
+    /// Legacy presentation fan-out registration (SOAK / older UI paths).
+    ///
+    /// Does **not** queue every persisted envelope into `tx`. Notifications are
+    /// coalesced through a capacity-1 bridge so slow consumers cannot force
+    /// unbounded memory growth on the control plane. Prefer
+    /// [`Self::subscribe_presentation`] + [`Self::snapshot`].
+    pub fn set_presentation_sender(&self, tx: Sender<PresentationEvent>) {
+        self.presentation.attach_legacy_sender(tx);
+    }
+
+    /// Subscribe to coalescing presentation notifications (W2-A).
+    pub fn subscribe_presentation(&self) -> PresentationSubscription {
+        self.presentation.subscribe()
+    }
+
+    /// Current presentation snapshot (schema-versioned + delivery revision).
     pub fn snapshot(&self) -> PresentationSnapshot {
-        self.snapshot.lock().expect("snap").clone()
+        self.presentation.snapshot()
     }
 
     /// Refresh Heli read-only status into snapshot (never crashes).
     pub fn refresh_heli(&self) -> crate::types::HeliStatusView {
         let heli = probe_heli(&self.config.heli_probe_path);
-        let mut snap = self.snapshot.lock().expect("snap");
+        let mut snap = self.presentation.snapshot();
         snap.heli = heli.clone();
+        self.presentation.publish_snapshot(snap);
         heli
+    }
+
+    /// Shut down presentation delivery (consumers + legacy forwarders).
+    ///
+    /// Safe to call multiple times. Does not close storage or sessions; intended
+    /// for process teardown / tests proving no presentation tasks remain.
+    pub fn shutdown_presentation(&self) {
+        self.presentation.shutdown();
     }
 
     // -------------------------------------------------------------------------
@@ -331,8 +353,8 @@ impl ControlPlane {
         }
 
         // Start continuous ingest BEFORE initialize/session so no events are lost.
-        let fanout = self.presentation_tx.lock().expect("tx").clone();
-        live.start_ingestor(self.storage.clone(), fanout);
+        // Presentation hub is shared; post-persist projection updates never block persist.
+        live.start_ingestor(self.storage.clone(), Some(self.presentation.clone()));
 
         // initialize
         let init = tokio::task::spawn_blocking({
@@ -1016,24 +1038,46 @@ impl ControlPlane {
     }
 
     fn refresh_snapshot_for(&self, live: &LiveSession) {
-        let st = live.state.lock().expect("state");
-        let mut snap = self.snapshot.lock().expect("snap");
+        // Preserve heli (and any other global fields) from the current projection.
+        let heli = self.presentation.snapshot().heli;
+        let input = {
+            let st = live.state.lock().expect("state");
+            SessionProjectionInput {
+                session_id: live.session_id.to_string(),
+                project_id: live.project_id.to_string(),
+                status: st.status,
+                auth_state: st.auth_state,
+                pending_approvals: st.pending_approvals.values().cloned().collect(),
+                last_error: st.last_error.clone(),
+                capabilities: st.capabilities.clone(),
+                latest_sequence: st.latest_sequence,
+                prompt_in_flight: st.prompt_in_flight,
+                process_alive: live.adapter.is_process_alive(),
+                protocol_ready: live.adapter.is_protocol_ready(),
+                session_ready: live.adapter.is_session_ready(),
+            }
+        };
+        // Ensure active session is set even when hub had a different active id
+        // (command path is authoritative for "current" session).
+        let mut snap = self.presentation.snapshot();
         snap.version = SNAPSHOT_VERSION;
-        snap.active_project_id = Some(live.project_id.to_string());
-        snap.active_session_id = Some(live.session_id.to_string());
-        snap.session_status = Some(st.status);
-        snap.auth_state = st.auth_state;
-        snap.pending_approvals = st.pending_approvals.values().cloned().collect();
-        snap.last_error = st.last_error.clone();
-        snap.capabilities = st.capabilities.clone();
-        snap.latest_sequence = st.latest_sequence;
-        snap.prompt_in_flight = st.prompt_in_flight;
+        snap.heli = heli;
+        snap.active_project_id = Some(input.project_id.clone());
+        snap.active_session_id = Some(input.session_id.clone());
+        snap.session_status = Some(input.status);
+        snap.auth_state = input.auth_state;
+        snap.pending_approvals = input.pending_approvals;
+        snap.last_error = input.last_error;
+        snap.capabilities = input.capabilities;
+        snap.latest_sequence = input.latest_sequence;
+        snap.prompt_in_flight = input.prompt_in_flight;
         snap.runtime_observation = runtime_observation(
-            live.adapter.is_process_alive(),
-            live.adapter.is_protocol_ready(),
-            live.adapter.is_session_ready(),
-            st.status,
+            input.process_alive,
+            input.protocol_ready,
+            input.session_ready,
+            input.status,
         );
+        self.presentation.publish_snapshot(snap);
     }
 }
 

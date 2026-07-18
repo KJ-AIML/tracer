@@ -89,7 +89,8 @@ None blocking L3-J on this host. Residual notes:
 |---|---|
 | `7584d3f` | Desktop GUI product surface + e2e env hooks |
 | `240ee82` | L3-J harness + GJ-01..12 journeys |
-| `e988037` | This completion report + architecture/matrix/results |
+| `e988037` | Architecture, journey spec, matrix, results, completion body |
+| Branch tip | `agent/tracer-w2-webview-gui-journey` (pin commit after docs) |
 
 ## Out of scope (honored)
 

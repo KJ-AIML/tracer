@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "W2.3-C Tauri E2E: L0-L3-J + reliability (ports, sanitize, repeat, inject)",
+  "description": "W2.3 Tauri E2E: L0-L3-J + reliability + opt-in live Grok GUI (LGJ)",
   "scripts": {
     "test": "node ./run.mjs",
     "test:policy": "node ./run.mjs --policy-only",
@@ -15,6 +15,9 @@
     "test:l2": "node ./l2-smoke.mjs",
     "test:l3i": "node ./l3i-infra.mjs",
     "test:gui": "node ./l3j-gui.mjs",
+    "test:live-gui": "node ./live/lgj.mjs",
+    "test:live-gui:dry": "node ./live/dry-run.mjs",
+    "test:live-gui:unit": "node ./live/unit.mjs",
     "test:all": "node ./run.mjs --all",
     "test:tauri-e2e:doctor": "node ./doctor.mjs",
     "test:tauri-e2e:l2": "node ./l2-smoke.mjs",

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Tauri E2E doctor — environment discovery + readiness classification (W2.2-T).
+ * Tauri E2E doctor — environment discovery + readiness classification
+ * (W2.2-T base + W2.3-C Edge-update resilience).
  *
  * Modes:
  *   plan (default)  — inventory only, no install
@@ -32,6 +33,7 @@ import {
   ComponentStatus,
 } from "./lib/classify.mjs";
 import { runDiscovery, REPO_ROOT } from "./lib/discover.mjs";
+import { edgeUpdateResilienceProbe } from "./lib/reliability.mjs";
 
 const args = new Set(process.argv.slice(2));
 const asJson = args.has("--json");
@@ -45,7 +47,7 @@ const planOnly = args.has("--plan") || !wantApply;
 function printHuman(report) {
   const { env, issues, capabilities, classification, ci, components, mode } =
     report;
-  console.log("=== Tauri E2E Doctor (W2.2-T) ===");
+  console.log("=== Tauri E2E Doctor (W2.3-C reliability) ===");
   console.log(`mode: ${mode}`);
   console.log(`repo: ${env.paths.repoRoot}`);
   console.log(`os: ${env.os.platform}/${env.os.arch} (${env.os.release})`);
@@ -106,6 +108,15 @@ function printHuman(report) {
   console.log(
     `processCleanup: ${env.processCleanup.available ? env.processCleanup.method : "UNAVAILABLE"}`,
   );
+  if (report.edgeResilience) {
+    const er = report.edgeResilience;
+    console.log(
+      `edgeResilience: applicable=${er.applicable} compatible=${er.compatible} code=${er.code}`,
+    );
+    if (er.remediation) {
+      console.log(`  remediation: ${er.remediation.command}`);
+    }
+  }
   console.log("");
   console.log("Components:");
   for (const c of components || []) {
@@ -247,6 +258,29 @@ function main() {
     }
 
     const { env, issues, capabilities, components } = runDiscovery();
+    const edgeResilience = edgeUpdateResilienceProbe();
+
+    // Edge auto-update resilience: attach remediation when incompatible (W2.3-C).
+    // Avoid duplicate issue codes if discovery already reported mismatch.
+    if (edgeResilience.applicable && !edgeResilience.compatible) {
+      const code = edgeResilience.code || "EDGE_DRIVER_VERSION_MISMATCH";
+      const existing = issues.find((i) => i.code === code || String(i.code || "").includes("EDGE_DRIVER"));
+      if (existing) {
+        existing.setup = existing.setup || edgeResilience.remediation?.command;
+        existing.fallback = existing.fallback || edgeResilience.remediation?.alt;
+        existing.rule = existing.rule || edgeResilience.rule;
+      } else {
+        issues.push({
+          class: DoctorClass.INCOMPATIBLE_VERSION,
+          code,
+          message: edgeResilience.message,
+          setup: edgeResilience.remediation?.command,
+          fallback: edgeResilience.remediation?.alt,
+          rule: edgeResilience.rule,
+        });
+      }
+    }
+
     const hardIssues = issues.filter((i) => i.code !== "tauri_cli");
     const classification =
       hardIssues.length === 0
@@ -257,8 +291,8 @@ function main() {
 
     const report = {
       schemaVersion: 1,
-      module: "W2.2-T",
-      task: "tracer-w2-webview-tooling",
+      module: "W2.3-C",
+      task: "tracer-w2-gui-reliability",
       mode: wantApply ? "apply" : "plan",
       classification,
       doctorClasses: DoctorClass,
@@ -269,8 +303,9 @@ function main() {
       issues,
       env,
       apply: applyResult,
+      edgeResilience,
       notes: {
-        l3j: "NOT_STARTED — full GUI product journey is future W2.2-B; not claimed",
+        l3j: "L3-J via pnpm test:tauri-e2e:gui; reliability batch via pnpm test:tauri-e2e:repeat-gui",
         network: wantApply
           ? "one-time driver download may use network during apply"
           : "no",
@@ -280,6 +315,8 @@ function main() {
         tempSqlite: "yes if needed",
         applyAuth: "TRACER_TAURI_E2E_SETUP=1 or --apply",
         compatibilityRule: "major(msedgedriver) == major(Edge)",
+        edgeUpdateResilience:
+          "On Edge major auto-update, doctor reports INCOMPATIBLE_VERSION + remediation; --apply re-downloads matching msedgedriver (no silent PASS)",
         ciIsolation:
           "L3-I not in pnpm -r test / cargo workspace; use pnpm test:tauri-e2e:l3i",
       },

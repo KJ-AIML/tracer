@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "W2.2-B Tauri E2E: L0-L1 boundary, L2 smoke, L3-I infra, L3-J product GUI journeys",
+  "description": "W2.3-C Tauri E2E: L0-L3-J + reliability (ports, sanitize, repeat, inject)",
   "scripts": {
     "test": "node ./run.mjs",
     "test:policy": "node ./run.mjs --policy-only",
@@ -19,7 +19,13 @@
     "test:tauri-e2e:doctor": "node ./doctor.mjs",
     "test:tauri-e2e:l2": "node ./l2-smoke.mjs",
     "test:tauri-e2e:l3i": "node ./l3i-infra.mjs",
-    "test:tauri-e2e:gui": "node ./l3j-gui.mjs"
+    "test:tauri-e2e:gui": "node ./l3j-gui.mjs",
+    "test:reliability": "node ./reliability-selftest.mjs",
+    "test:inject-fail": "node ./inject-fail.mjs",
+    "test:repeat-gui": "node ./repeat-gui.mjs",
+    "test:tauri-e2e:reliability": "node ./reliability-selftest.mjs",
+    "test:tauri-e2e:inject-fail": "node ./inject-fail.mjs",
+    "test:tauri-e2e:repeat-gui": "node ./repeat-gui.mjs"
   },
   "engines": {
     "node": ">=20"

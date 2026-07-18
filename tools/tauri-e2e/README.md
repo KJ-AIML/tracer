@@ -1,8 +1,9 @@
-# Tauri E2E infrastructure (W2.2-A + Gate 2.1)
+# Tauri E2E infrastructure (W2.2-A + W2.2-B + W2.3-C reliability)
 
-**Task:** `tracer-w2-tauri-e2e-infrastructure`  
-**Classification:** infrastructure + packaged-app smoke + WebView **driver infrastructure**  
-**L3-J:** product journeys GJ-01…GJ-12 via `pnpm test:tauri-e2e:gui` (W2.2-B)
+**Tasks:** `tracer-w2-tauri-e2e-infrastructure` + `tracer-w2-gui-reliability`  
+**Classification:** infrastructure + packaged-app smoke + WebView driver + GUI reliability  
+**L3-J:** product journeys GJ-01…GJ-12 via `pnpm test:tauri-e2e:gui`  
+**Reliability:** free ports, state waits, Edge doctor, inject-fail, `repeat-gui`
 
 ## Levels (do not collapse)
 

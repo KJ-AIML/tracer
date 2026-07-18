@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * L3-J — Full WebView GUI product journeys (W2.2-B).
+ * L3-J — Full WebView GUI product journeys (W2.2-B + W2.3-C reliability).
  *
  * Lifecycle:
  *   doctor READY → build → msedgedriver → tauri-driver → launch isolated env
@@ -22,7 +22,6 @@ import {
   readFileSync,
 } from "node:fs";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import {
   ResultClass,
   Level,
@@ -51,6 +50,23 @@ import { createStageReport } from "./lib/stages.mjs";
 import { WebDriverClient, waitDriverReady } from "./lib/webdriver.mjs";
 import { filterJourneys } from "./lib/journeys.mjs";
 import { waitAppReady, attrTestId } from "./lib/gui.mjs";
+import { allocateDriverPort } from "./lib/ports.mjs";
+import {
+  sanitizeArtifactText,
+  captureFailureArtifacts,
+  auditArtifactSanitization,
+} from "./lib/artifacts.mjs";
+import {
+  parseInjectMode,
+  injectClassification,
+  edgeUpdateResilienceProbe,
+  cleanupTempDir,
+  verifyNoOrphans,
+  countProductAssertionFailures,
+  waitUntil,
+  backoff,
+  WAIT_POLICY,
+} from "./lib/reliability.mjs";
 
 const args = process.argv.slice(2);
 const argSet = new Set(args);
@@ -63,10 +79,22 @@ const journeyFilter = (() => {
   return eq ? eq.split("=")[1] : null;
 })();
 
-const port = Number(process.env.TRACER_TAURI_DRIVER_PORT || 4444);
 const host = process.env.TRACER_TAURI_DRIVER_HOST || "127.0.0.1";
-const baseUrl = `http://${host}:${port}`;
 const profile = process.env.TRACER_E2E_PROFILE || "debug";
+const inject = parseInjectMode();
+/** @type {{ port: number, host: string, strategy: string, probed: object[] } | null} */
+let portAlloc = null;
+let portCollisionAvoidanceEvents = 0;
+/** @type {{ driverStartupMs: number|null, appReadinessMs: number|null, suiteMs: number|null, shutdownMs: number|null, startedAt: string, finishedAt: string|null }} */
+const timing = {
+  driverStartupMs: null,
+  appReadinessMs: null,
+  suiteMs: null,
+  shutdownMs: null,
+  startedAt: new Date().toISOString(),
+  finishedAt: null,
+};
+const suiteT0 = Date.now();
 
 installExitHooks();
 
@@ -174,7 +202,7 @@ async function main() {
 
   /** @type {import('./lib/process.mjs').OwnedProcess | null} */
   let driver = null;
-  const client = new WebDriverClient(baseUrl);
+  const client = new WebDriverClient(`http://${host}:4444`);
   const spawnPaths = resolveDriverSpawnPaths();
   let binary = null;
   /** Resolved app entry (wrapper script when env injection required). */
@@ -182,61 +210,48 @@ async function main() {
   /** @type {Record<string,string>} */
   let appEnv = {};
 
-  console.log("=== L3-J Full WebView GUI Product Journeys (W2.2-B) ===");
+  console.log("=== L3-J Full WebView GUI Product Journeys (W2.3-C reliability) ===");
   console.log(`runId: ${rid}`);
   console.log(`workDir: ${workDir}`);
   console.log(`artifacts: ${artifactsDir}`);
-  console.log(`driver: ${baseUrl}`);
+  console.log(`driver host: ${host} (port allocated at launch)`);
+  console.log(`inject: ${inject.mode}`);
+  // Preflight: detect stale harness processes (do not reap by default — concurrent
+  // runners may share image names; free-port alloc + owned teardown own isolation).
+  {
+    const pre = verifyNoOrphans(ORPHAN_CHECK_NAMES, { reap: false });
+    if (!pre.ok) {
+      console.warn(
+        `[l3j] preflight: ${pre.remaining.length} process name hit(s) already present: ${JSON.stringify(pre.remaining)}`,
+      );
+    }
+  }
+  const edgeProbe = edgeUpdateResilienceProbe();
+  if (edgeProbe.applicable && !edgeProbe.compatible) {
+    console.warn(`[l3j] Edge/driver mismatch: ${edgeProbe.message}`);
+    if (edgeProbe.remediation) {
+      console.warn(`[l3j] remediation: ${edgeProbe.remediation.command}`);
+    }
+  }
   console.log(`journeys: ${journeyFilter || "ALL GJ-01..GJ-12"}`);
 
   const journeysToRun = filterJourneys(journeyFilter);
   /** @type {import('./lib/journeys.mjs').JOURNEY_RUNNERS[0] extends never ? any : any[]} */
   const journeyResults = [];
 
-  function sanitizeArtifactText(text) {
-    if (!text) return text;
-    return String(text)
-      .replace(/(Authorization:\s*)(Bearer\s+)?[^\s"']+/gi, "$1$2[REDACTED]")
-      .replace(/(api[_-]?key|token|secret|password|credential)\s*[:=]\s*[^\s"']+/gi, "$1=[REDACTED]")
-      .replace(/([A-Za-z]:\\Users\\)[^\\"']+/g, "$1[USER]")
-      .replace(/(\/Users\/)[^\/"']+/g, "$1[USER]");
-  }
-
   async function captureArtifact(label) {
-    const dir = path.join(artifactsDir, label);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const src = await client.getPageSource();
-      const body = sanitizeArtifactText(src.raw || JSON.stringify(src.body));
-      writeFileSync(path.join(dir, "page.html"), body, "utf8");
-    } catch (e) {
+    if (inject.mode === "artifact_secret") {
+      const dir = path.join(artifactsDir, label);
+      mkdirSync(dir, { recursive: true });
       writeFileSync(
-        path.join(dir, "page-error.txt"),
-        sanitizeArtifactText(e instanceof Error ? e.message : String(e)),
+        path.join(dir, "injected-secret-source.txt"),
+        sanitizeArtifactText(
+          "Authorization: Bearer sk-INJECT-SHOULD-REDACT\napi_key=inject-secret-value\n",
+        ),
         "utf8",
       );
     }
-    try {
-      const title = await client.getTitle();
-      writeFileSync(path.join(dir, "title.json"), JSON.stringify(title.body, null, 2), "utf8");
-    } catch {
-      /* ignore */
-    }
-    try {
-      const probe = await client.execute(`
-        return {
-          ready: !!document.querySelector('[data-testid="tracer-app-ready"]'),
-          backend: document.querySelector('[data-testid="tracer-app-root"]')?.getAttribute('data-tracer-backend'),
-          route: document.querySelector('[data-testid="tracer-app-root"]')?.getAttribute('data-tracer-route'),
-          status: document.querySelector('[data-testid="tracer-session-workspace"]')?.getAttribute('data-session-status'),
-          title: document.title
-        };
-      `);
-      writeFileSync(path.join(dir, "probe.json"), JSON.stringify(probe.body, null, 2), "utf8");
-    } catch {
-      /* ignore */
-    }
-    return { dir };
+    return captureFailureArtifacts(client, artifactsDir, label);
   }
 
   /**
@@ -253,6 +268,41 @@ async function main() {
   }
 
   async function startDriverAndApp() {
+    // Deterministic inject short-circuits (C6) — honest first-attempt fail, no retry.
+    if (inject.mode === "tauri_driver_startup_failure") {
+      throw Object.assign(
+        new Error("injected tauri_driver_startup_failure"),
+        { code: FailureCode.DRIVER_STARTUP_FAILED },
+      );
+    }
+    if (inject.mode === "msedgedriver_startup_failure") {
+      throw Object.assign(
+        new Error("injected msedgedriver_startup_failure"),
+        { code: FailureCode.MSEDGEDRIVER_STARTUP_FAILED },
+      );
+    }
+    if (inject.mode === "stale_edge_driver") {
+      throw Object.assign(
+        new Error("injected stale_edge_driver / EDGE_DRIVER_VERSION_MISMATCH"),
+        { code: FailureCode.EDGE_DRIVER_VERSION_MISMATCH },
+      );
+    }
+    if (inject.mode === "app_launch_failure") {
+      throw Object.assign(new Error("injected app_launch_failure"), {
+        code: FailureCode.APP_LAUNCH_FAILED,
+      });
+    }
+    if (inject.mode === "sqlite_unavailable") {
+      throw Object.assign(new Error("injected sqlite_unavailable"), {
+        code: FailureCode.SQLITE_UNAVAILABLE,
+      });
+    }
+    if (inject.mode === "fake_runtime_crash") {
+      throw Object.assign(new Error("injected fake_runtime_crash"), {
+        code: FailureCode.FAKE_RUNTIME_CRASH,
+      });
+    }
+
     if (driver) {
       try {
         await client.deleteSession().catch(() => {});
@@ -262,7 +312,22 @@ async function main() {
       await driver.stop().catch(() => {});
       driver = null;
     }
-    const driverArgs = ["--port", String(port)];
+    const preferred =
+      portAlloc?.port ?? Number(process.env.TRACER_TAURI_DRIVER_PORT || 4444);
+    portAlloc = await allocateDriverPort({
+      preferred,
+      host,
+      forceEphemeral: inject.mode === "port_hold",
+    });
+    if (portAlloc.probed?.some((p) => !p.available)) {
+      portCollisionAvoidanceEvents += 1;
+    }
+    client.baseUrl = `http://${portAlloc.host}:${portAlloc.port}`;
+    console.log(
+      `[l3j] driver port ${portAlloc.port} strategy=${portAlloc.strategy}`,
+    );
+    const driverT0 = Date.now();
+    const driverArgs = ["--port", String(portAlloc.port)];
     const native =
       process.env.TRACER_NATIVE_DRIVER || spawnPaths.nativePath || null;
     if (native) driverArgs.push("--native-driver", native);
@@ -271,7 +336,10 @@ async function main() {
       logDir,
       windowsHide: true,
     });
-    await waitDriverReady(baseUrl, { timeoutMs: 30_000 });
+    await waitDriverReady(client.baseUrl, {
+      timeoutMs: WAIT_POLICY.driverReady.timeoutMs,
+    });
+    timing.driverStartupMs = Date.now() - driverT0;
 
     appEnv = {
       TRACER_DATABASE_PATH: dbPath,
@@ -284,6 +352,7 @@ async function main() {
     const envFile = writeE2eEnvFile(appEnv);
     applicationEntry = binary;
     console.log(`[l3j] e2e env file: ${envFile}`);
+    const readyT0 = Date.now();
     const res = await client.newSession(
       {
         application: binary,
@@ -301,7 +370,24 @@ async function main() {
         { code: FailureCode.SESSION_CREATE_FAILED },
       );
     }
-    await waitAppReady(client, { timeoutMs: 60_000 });
+    try {
+      await waitAppReady(client, {
+        timeoutMs: WAIT_POLICY.appReady.timeoutMs,
+      });
+    } catch (e) {
+      throw Object.assign(
+        new Error(
+          `app ready marker missing: ${e instanceof Error ? e.message : e}`,
+        ),
+        { code: FailureCode.ROOT_MARKER_MISSING },
+      );
+    }
+    if (inject.mode === "root_marker_missing") {
+      throw Object.assign(new Error("injected root_marker_missing"), {
+        code: FailureCode.ROOT_MARKER_MISSING,
+      });
+    }
+    timing.appReadinessMs = Date.now() - readyT0;
     // Mark automation mode so GUI skips blocking window.confirm on leave.
     await client
       .execute(`globalThis.__TRACER_E2E__ = true; return true;`)
@@ -317,14 +403,19 @@ async function main() {
     } catch {
       /* ignore */
     }
-    await delay(1500);
-    for (let i = 0; i < 20; i++) {
-      const orphans = findOrphans(["tracer-desktop", "tracer_desktop"]);
-      if (!orphans.length) break;
+    try {
+      await waitUntil(
+        () => findOrphans(["tracer-desktop", "tracer_desktop"]).length === 0,
+        { timeoutMs: 15_000, intervalMs: 400, label: "desktop-exit-before-relaunch" },
+      );
+    } catch {
       reapOrphans(["tracer-desktop", "tracer_desktop"]);
-      await delay(500);
+      await waitUntil(
+        () => findOrphans(["tracer-desktop", "tracer_desktop"]).length === 0,
+        { timeoutMs: 10_000, intervalMs: 400, label: "desktop-reap-before-relaunch" },
+      ).catch(() => {});
     }
-    await delay(500);
+    await backoff(400);
     const envFile = writeE2eEnvFile(appEnv);
     const res = await client.newSession(
       {
@@ -454,6 +545,24 @@ async function main() {
 
     // Product journeys (serial)
     await report.run(StageId.SMOKE, async () => {
+      if (inject.mode === "forced_gui_assertion_failure") {
+        journeyResults.push({
+          id: "GJ-INJECT",
+          name: "forced_gui_assertion_failure",
+          result: ResultClass.FAIL,
+          message: "injected forced GUI assertion failure — first attempt",
+          detail: {
+            code: FailureCode.GUI_ASSERTION_FAILED,
+            retries: 0,
+          },
+        });
+        return {
+          status: "fail",
+          classification: ResultClass.FAIL,
+          message: "injected forced_gui_assertion_failure",
+          detail: { journeys: journeyResults },
+        };
+      }
       const ctx = {
         client,
         workDir,
@@ -475,6 +584,7 @@ async function main() {
             id: j.id,
             result: ResultClass.FAIL,
             message: e instanceof Error ? e.message : String(e),
+            detail: { code: e?.code || null },
           };
         }
         result.durationMs = Date.now() - started;
@@ -483,6 +593,23 @@ async function main() {
         console.log(`[${result.result}] ${j.id}: ${result.message || ""}`);
         if (result.result === ResultClass.FAIL) {
           await captureArtifact(`${j.id}-fail`).catch(() => {});
+        }
+        // Harness edge resilience: if WebDriver session died, recover once for
+        // subsequent journeys (not a product assert retry — first attempt only).
+        const sessionDead =
+          /invalid session/i.test(String(result.message || "")) ||
+          result.detail?.code === "INVALID_SESSION";
+        if (sessionDead && j.id !== journeysToRun[journeysToRun.length - 1]?.id) {
+          console.warn(
+            `[l3j] WebDriver session lost after ${j.id}; recovering for next journeys`,
+          );
+          try {
+            await relaunchApp();
+          } catch (re) {
+            console.warn(
+              `[l3j] session recovery failed: ${re instanceof Error ? re.message : re}`,
+            );
+          }
         }
       }
       const overall = suiteResultFromJourneys(journeyResults);
@@ -504,8 +631,29 @@ async function main() {
     });
 
     await report.run(StageId.APP_SHUTDOWN, async () => {
-      const res = await client.deleteSession({ timeoutMs: 30_000 });
-      await delay(800);
+      const shutT0 = Date.now();
+      if (inject.mode === "shutdown_timeout") {
+        throw Object.assign(new Error("injected shutdown_timeout"), {
+          code: FailureCode.SHUTDOWN_TIMEOUT,
+        });
+      }
+      const res = await client.deleteSession({
+        timeoutMs: WAIT_POLICY.shutdown.timeoutMs,
+      });
+      try {
+        await waitUntil(
+          () => findOrphans(["tracer-desktop", "tracer_desktop"]).length === 0,
+          {
+            timeoutMs: 10_000,
+            intervalMs: 300,
+            label: "desktop-exit-after-session-delete",
+          },
+        );
+      } catch {
+        reapOrphans(["tracer-desktop", "tracer_desktop"]);
+        await backoff(300);
+      }
+      timing.shutdownMs = (timing.shutdownMs || 0) + (Date.now() - shutT0);
       return {
         status: "pass",
         message: `session deleted HTTP ${res.statusCode}`,
@@ -513,38 +661,49 @@ async function main() {
     });
 
     await report.run(StageId.DRIVER_SHUTDOWN, async () => {
+      const shutT0 = Date.now();
       if (driver) {
         const pid = driver.pid;
         await driver.stop();
-        await delay(400);
-        if (processAlive(pid)) {
-          throw new Error(`tauri-driver pid ${pid} still alive`);
+        try {
+          await waitUntil(() => !processAlive(pid), {
+            timeoutMs: 10_000,
+            intervalMs: 250,
+            label: "tauri-driver-exit",
+          });
+        } catch {
+          throw Object.assign(
+            new Error(`tauri-driver pid ${pid} still alive after stop`),
+            { code: FailureCode.SHUTDOWN_TIMEOUT },
+          );
         }
+        timing.shutdownMs = (timing.shutdownMs || 0) + (Date.now() - shutT0);
         return { status: "pass", message: `driver stopped pid=${pid}` };
       }
+      timing.shutdownMs = (timing.shutdownMs || 0) + (Date.now() - shutT0);
       return { status: "pass", message: "no driver handle" };
     });
 
     await report.run(StageId.ORPHAN_VERIFY, async () => {
-      await delay(600);
-      let orphans = findOrphans(ORPHAN_CHECK_NAMES);
-      if (orphans.length) {
-        const reaped = reapOrphans(ORPHAN_CHECK_NAMES);
-        orphans = findOrphans(ORPHAN_CHECK_NAMES);
-        if (orphans.length) {
-          throw Object.assign(
-            new Error(`orphans remain: ${JSON.stringify(orphans)}`),
-            { code: FailureCode.ORPHAN_PROCESS },
-          );
-        }
+      if (inject.mode === "orphan_leak" && driver && !driver.stopped) {
+        console.warn("[l3j] inject orphan_leak: leaving driver up for detect/reap cycle");
+      }
+      await backoff(500);
+      const verified = verifyNoOrphans(ORPHAN_CHECK_NAMES, { reap: true });
+      if (!verified.ok) {
+        throw Object.assign(
+          new Error(`orphans remain: ${JSON.stringify(verified.remaining)}`),
+          { code: FailureCode.ORPHAN_PROCESS },
+        );
+      }
+      if (verified.reaped?.length) {
         return {
           status: "partial",
           classification: ResultClass.PARTIAL,
           message: "orphans reaped",
-          detail: { reaped },
+          detail: { reaped: verified.reaped },
         };
       }
-      // Patch GJ-12 if orphan clean
       const gj12 = journeyResults.find((j) => j.id === "GJ-12");
       if (gj12 && gj12.result === ResultClass.PASS) {
         gj12.message = "clean shutdown; no orphans after teardown";
@@ -553,18 +712,26 @@ async function main() {
       return { status: "pass", message: "no orphans" };
     });
 
-    // Temp cleanup (best effort)
+    const overall = suiteResultFromJourneys(journeyResults);
+    timing.suiteMs = Date.now() - suiteT0;
+    timing.finishedAt = new Date().toISOString();
+    const tempCleanup = cleanupTempDir(workDir, {
+      keep: overall !== ResultClass.PASS,
+    });
+    let artifactAudit = { ok: true, violations: [] };
     try {
-      // keep artifacts; remove workDir logs only if clean
-      if (process.env.TRACER_E2E_KEEP_TEMP !== "1") {
-        // leave workDir for diagnosis on fail
-        const overall = suiteResultFromJourneys(journeyResults);
-        if (overall === ResultClass.PASS) {
-          rmSync(workDir, { recursive: true, force: true });
-        }
-      }
+      artifactAudit = auditArtifactSanitization(artifactsDir);
     } catch {
       /* ignore */
+    }
+    if (inject.mode === "mid_journey_kill") {
+      journeyResults.push({
+        id: "INJECT",
+        name: "mid_journey_kill",
+        result: ResultClass.FAIL,
+        message: "injected mid_journey_kill — honest fail; retries=0",
+        detail: { retries: 0 },
+      });
     }
 
     return finish(report.summary(), {
@@ -573,9 +740,18 @@ async function main() {
       rid,
       binary,
       journeyResults,
+      tempCleanup,
+      portAlloc,
+      portCollisionAvoidanceEvents,
+      artifactAudit,
+      edgeProbe,
+      inject,
+      timing: { ...timing },
     });
   } catch (e) {
     console.error("[l3j-gui] FAILED:", e instanceof Error ? e.message : e);
+    timing.suiteMs = Date.now() - suiteT0;
+    timing.finishedAt = new Date().toISOString();
     try {
       await captureArtifact("harness-fail");
     } catch {
@@ -589,7 +765,26 @@ async function main() {
       /* ignore */
     }
     const summary = report.summary();
-    if (summary.result === ResultClass.PASS) summary.result = ResultClass.FAIL;
+    const code = e?.code || FailureCode.DRIVER_STARTUP_FAILED;
+    const injectExpected = injectClassification(inject.mode);
+    const toolingBlock =
+      code === FailureCode.EDGE_DRIVER_VERSION_MISMATCH ||
+      code === FailureCode.DRIVER_STARTUP_FAILED ||
+      code === FailureCode.MSEDGEDRIVER_STARTUP_FAILED ||
+      code === FailureCode.TAURI_DRIVER_NOT_FOUND ||
+      code === FailureCode.EDGE_DRIVER_NOT_FOUND;
+    if (summary.result === ResultClass.PASS) {
+      summary.result = toolingBlock
+        ? ResultClass.BLOCKED_BY_TOOLING
+        : ResultClass.FAIL;
+    }
+    // Prefer inject contract classification when inject mode is active
+    let resultOverride = null;
+    if (inject.mode !== "none" && injectExpected.result) {
+      resultOverride = injectExpected.result;
+    } else if (toolingBlock) {
+      resultOverride = ResultClass.BLOCKED_BY_TOOLING;
+    }
     return finish(
       summary,
       {
@@ -598,7 +793,11 @@ async function main() {
         rid,
         journeyResults,
         error: e instanceof Error ? e.message : String(e),
-        failureCode: e?.code || FailureCode.DRIVER_STARTUP_FAILED,
+        failureCode: code,
+        timing: { ...timing },
+        resultOverride,
+        inject,
+        edgeProbe,
       },
       1,
     );
@@ -612,14 +811,18 @@ function finish(summary, meta, exitHint) {
       ? suiteResultFromJourneys(meta.journeyResults)
       : summary.result);
 
+  const journeys = meta.journeyResults || [];
+  const productAssertionFailures = countProductAssertionFailures(journeys);
+  if (!timing.suiteMs) timing.suiteMs = Date.now() - suiteT0;
+  if (!timing.finishedAt) timing.finishedAt = new Date().toISOString();
   const out = {
     schemaVersion: 1,
-    module: "W2.2-B",
+    module: "W2.3-C",
     level: Level.L3J_PRODUCT_JOURNEY,
     result: journeyOverall,
     failureCode: meta.failureCode || null,
     stages: summary.stages,
-    journeys: meta.journeyResults || [],
+    journeys,
     meta: {
       runId: meta.rid,
       workDir: meta.workDir,
@@ -627,6 +830,19 @@ function finish(summary, meta, exitHint) {
       binary: meta.binary,
       error: meta.error,
       claimsL3J: true,
+      attempt: "first",
+      retries: 0,
+      productAssertionFailures,
+      port: meta.portAlloc?.port ?? null,
+      portStrategy: meta.portAlloc?.strategy ?? null,
+      portCollisions: 0,
+      portCollisionAvoidanceEvents: meta.portCollisionAvoidanceEvents ?? 0,
+      tempCleanup: meta.tempCleanup ?? null,
+      artifactAudit: meta.artifactAudit ?? null,
+      edge: meta.edgeProbe ?? meta.edge ?? null,
+      inject: meta.inject ?? parseInjectMode(),
+      timing: meta.timing || { ...timing },
+      waitPolicy: WAIT_POLICY,
       ciClass: "windows_gui_runner | platform_gated_ci | manual_local",
       network: false,
       credentials: false,
@@ -635,6 +851,8 @@ function finish(summary, meta, exitHint) {
       fakeAcp: true,
       isolation:
         "NOT part of pnpm -r test or cargo test --workspace; explicit pnpm test:tauri-e2e:gui only",
+      reliability:
+        "W2.3-C state-based waits, free port alloc, sanitize artifacts, first-attempt only",
     },
   };
 

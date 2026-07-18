@@ -115,6 +115,34 @@ export async function selectTestId(client, testId, value, opts = {}) {
 }
 
 /**
+ * Surface WebDriver protocol errors instead of treating error objects as values.
+ * Prevents false "backend switched" when session died mid-suite.
+ * @param {{ statusCode?: number, body?: any }} res
+ * @param {string} label
+ */
+export function assertWebDriverOk(res, label = "command") {
+  const v = res?.body?.value;
+  if (v && typeof v === "object" && typeof v.error === "string") {
+    const msg = v.message || v.error;
+    const err = new Error(`WebDriver error during ${label}: ${v.error}: ${msg}`);
+    err.code =
+      /invalid session/i.test(v.error) || /invalid session/i.test(String(msg))
+        ? "INVALID_SESSION"
+        : "WEBDRIVER_ERROR";
+    throw err;
+  }
+  if (res?.statusCode >= 400) {
+    const err = new Error(
+      `WebDriver HTTP ${res.statusCode} during ${label}: ${JSON.stringify(res.body).slice(0, 300)}`,
+    );
+    err.code =
+      res.statusCode === 404 ? "INVALID_SESSION" : "WEBDRIVER_HTTP_ERROR";
+    throw err;
+  }
+  return res;
+}
+
+/**
  * Read attribute from testid element (via DOM script for reliability).
  */
 export async function attrTestId(client, testId, name) {
@@ -124,6 +152,7 @@ export async function attrTestId(client, testId, name) {
      return el.getAttribute(arguments[0]);`,
     [name],
   );
+  assertWebDriverOk(res, `attrTestId(${testId},${name})`);
   return res.body?.value ?? null;
 }
 
@@ -132,6 +161,7 @@ export async function textTestId(client, testId) {
     `var el = document.querySelector('[data-testid="${testId}"]');
      return el ? (el.innerText || el.textContent || '') : null;`,
   );
+  assertWebDriverOk(res, `textTestId(${testId})`);
   return res.body?.value ?? null;
 }
 
@@ -139,6 +169,7 @@ export async function existsTestId(client, testId) {
   const res = await client.execute(
     `return !!document.querySelector('[data-testid="${testId}"]');`,
   );
+  assertWebDriverOk(res, `existsTestId(${testId})`);
   return res.body?.value === true;
 }
 

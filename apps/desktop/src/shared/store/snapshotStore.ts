@@ -381,12 +381,23 @@ export class SnapshotJourney {
     return result.sessions;
   }
 
-  async createSession(projectId: string, title?: string): Promise<SessionSummary> {
+  async createSession(
+    projectId: string,
+    title?: string,
+    /** Optional runtime options (fake ACP scenario for E2E / harness). */
+    runtime?: {
+      runtimeKind?: string;
+      scenarioId?: string;
+      executableOverride?: string;
+      extraArgs?: string[];
+      fakeJs?: string;
+    },
+  ): Promise<SessionSummary> {
     this.dispatch({ type: "setCommandBusy", busy: true });
     try {
       const result = await invokeTracer<{ session: SessionSummary }>(
         "tracer_session_create",
-        { projectId, title },
+        { projectId, title, ...(runtime ? { runtime } : {}) },
       );
       await this.refreshSnapshot();
       await this.loadSessions(projectId);

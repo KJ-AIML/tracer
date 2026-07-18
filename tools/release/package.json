@@ -1,0 +1,16 @@
+{
+  "name": "@tracer/release",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "W2.3-A Windows release candidate packaging and validation",
+  "scripts": {
+    "release:windows": "node ./windows-rc.mjs",
+    "validate:windows": "node ./validate-windows.mjs",
+    "identity": "node ./identity-check.mjs",
+    "classify-signing": "node ./classify-signing.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

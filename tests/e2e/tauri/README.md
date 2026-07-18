@@ -1,35 +1,41 @@
-# Tauri E2E (W2-B)
+# Tauri E2E (W2.2-A infrastructure + Gate 2.1 boundary)
 
-**Task:** `tracer-w2-tauri-gui-e2e`  
-**Classification:** desktop-boundary E2E (+ frontend invoke policy). **Not** full WebView GUI E2E.
+**Tasks:**  
+- Gate 2.1 / W2-B: `tracer-w2-tauri-gui-e2e` (L0+L1 desktop-boundary)  
+- W2.2-A: `tracer-w2-tauri-e2e-infrastructure` (doctor, L2 smoke, L3-I driver infra)
 
-## Location of executable suites
+## Levels
 
-| Suite | Path |
-|---|---|
-| Desktop boundary journey (Rust) | `apps/desktop/src-tauri/tests/desktop_boundary_journey.rs` |
-| Invoke policy (TypeScript) | `apps/desktop/src/shared/commands/invoke.policy.test.ts` |
-| Orchestrator | `tools/tauri-e2e/run.mjs` |
+| Level | Suite | Path / command |
+|---|---|---|
+| L0 | Invoke policy | `apps/desktop/src/shared/commands/invoke.policy.test.ts` |
+| L1 | Desktop boundary journey | `apps/desktop/src-tauri/tests/desktop_boundary_journey.rs` |
+| L2 | Packaged app launch smoke | `node tools/tauri-e2e/l2-smoke.mjs` |
+| L3-I | WebView driver infrastructure | `node tools/tauri-e2e/l3i-infra.mjs` + `tests/e2e/webview-infrastructure/` |
+| L3-J | Full GUI product journey | **DEFERRED** — not in this folder |
 
 ## Run
 
 ```powershell
-# Full W2-B harness (policy + boundary + classification report)
+# Doctor
+node tools/tauri-e2e/doctor.mjs
+
+# L0 + L1 (standard CI)
 node tools/tauri-e2e/run.mjs
 
-# Policy only
-pnpm --filter @tracer/desktop exec vitest run src/shared/commands/invoke.policy.test.ts
+# L2 (GUI host / platform-gated)
+node tools/tauri-e2e/l2-smoke.mjs
 
-# Boundary only
-cargo test -p tracer-desktop --test desktop_boundary_journey -- --test-threads=1
+# L3-I (requires tauri-driver + msedgedriver on Windows)
+node tools/tauri-e2e/l3i-infra.mjs
 ```
-
-## Assertions covered (where technically supported)
-
-See `docs/modules/w2-b/W2_B_TEST_MATRIX.md`.
 
 ## Explicit non-claim
 
-This folder does **not** currently host Playwright/WebDriver scripts that click the real WebView. That path is documented as a follow-up in `docs/modules/w2-b/W2_B_E2E_ARCHITECTURE.md`.
+This tree does **not** host a full product GUI journey (create session → prompt → approval → history through DOM clicks). That is L3-J / future W2.2-B.
 
-Gate 2.1 integration must re-validate presentation snapshot fields after W2-A presentation delivery lands.
+## Docs
+
+- `docs/modules/w2-2-a/`
+- `docs/modules/w2-b/`
+- `docs/validation/tauri/TAURI_E2E_DOCTOR.md`

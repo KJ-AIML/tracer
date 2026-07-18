@@ -1,16 +1,47 @@
-# W2-B Tauri E2E harness
+# Tauri E2E infrastructure (W2.2-A + Gate 2.1)
 
-**Classification:** `desktop-boundary-e2e` (not full WebView GUI E2E)
+**Task:** `tracer-w2-tauri-e2e-infrastructure`  
+**Classification:** infrastructure + packaged-app smoke + WebView **driver infrastructure**  
+**Not claimed:** L3-J full GUI product journey (future W2.2-B)
 
-## What it runs
+## Levels (do not collapse)
 
-| Layer | Command | Proves |
+| Level | Meaning | Command |
 |---|---|---|
-| Frontend invoke policy | vitest `invoke.policy.test.ts` | Tauri detection; browser mock fallback; **no silent mock downgrade** |
-| Desktop boundary journey | `cargo test -p tracer-desktop --test desktop_boundary_journey` | Same `build_control_plane` + `plane_*` handlers Tauri registers; fake ACP; temp SQLite; reopen history |
-| GUI probe | report only | Documents WebDriver/tauri-driver blocker; **no false full-GUI claim** |
+| **L0** | Frontend invoke/mock policy | `node tools/tauri-e2e/run.mjs --policy-only` |
+| **L1** | Backend command-boundary (plane_* == Tauri handlers) | `node tools/tauri-e2e/run.mjs --boundary-only` |
+| **L2** | Built application launch smoke | `node tools/tauri-e2e/l2-smoke.mjs` |
+| **L3-I** | WebView driver infrastructure interaction | `node tools/tauri-e2e/l3i-infra.mjs` |
+| **L3-J** | Full GUI product journey | **DEFERRED** — do not claim |
 
-## Standard CI class
+## Doctor
+
+```powershell
+node tools/tauri-e2e/doctor.mjs
+node tools/tauri-e2e/doctor.mjs --json
+pnpm --filter @tracer/tauri-e2e doctor
+```
+
+**Root script name for integrator** (not always present in root `package.json`):
+
+```text
+pnpm test:tauri-e2e:doctor   →  node tools/tauri-e2e/doctor.mjs
+```
+
+Classifications: `READY | MISSING_TOOL | INCOMPATIBLE_VERSION | WEBVIEW_UNAVAILABLE | DRIVER_UNAVAILABLE | BUILD_REQUIRED | UNSUPPORTED_PLATFORM`
+
+See `docs/validation/tauri/TAURI_E2E_DOCTOR.md`.
+
+## Stages (L2 / L3-I)
+
+```text
+frontend build → Tauri backend build → packaging/test binary → driver startup
+→ app launch → readiness → smoke → app shutdown → driver shutdown → orphan verification
+```
+
+Each stage has a distinct status: `pass | fail | skip | partial | blocked_tooling | blocked_webview | unsupported`.
+
+## Standard CI class (L0+L1)
 
 - network: **no**
 - credentials: **no**
@@ -19,48 +50,53 @@
 - fake ACP: **yes**
 - temp file SQLite: **yes**
 
-## Run
+## L2 / L3-I CI class
 
-From repo root:
+- `windows_gui_runner` | `platform_gated_ci` | `manual_local`
+- Never emit false `PASS` when tooling blocks → use `BLOCKED_BY_TOOLING` / `BLOCKED_BY_WEBVIEW`
 
-```powershell
-node tools/tauri-e2e/run.mjs
-node tools/tauri-e2e/run.mjs --policy-only
-node tools/tauri-e2e/run.mjs --boundary-only
-node tools/tauri-e2e/run.mjs --gui-probe
-```
+## Driver safety
 
-Or:
+- Process ownership via `lib/process.mjs`
+- stdout/stderr capture under unique temp dirs
+- Timeouts + process-tree kill (`taskkill /T` on Windows)
+- Orphan detection for `tracer-desktop`, `tauri-driver`, `msedgedriver`
+- Exit hooks never leave the app/driver running
 
-```powershell
-pnpm --filter @tracer/tauri-e2e test
-```
-
-(Requires package workspace wiring; direct `node tools/tauri-e2e/run.mjs` always works.)
-
-## E2E env hooks (desktop app)
+## E2E env hooks
 
 | Variable | Purpose |
 |---|---|
-| `TRACER_DATABASE_PATH` | File SQLite path for persist/reopen journeys |
-| `TRACER_FAKE_ACP_JS` | Path to `fake-acp-runtime.js` |
-| `TRACER_HELI_PROBE_PATH` | Directory for Heli probe (empty → unavailable non-fatal) |
-| `TRACER_NODE_BIN` | Node executable for fake ACP spawn |
+| `TRACER_DATABASE_PATH` | File SQLite path |
+| `TRACER_FAKE_ACP_JS` | Path to fake ACP script |
+| `TRACER_HELI_PROBE_PATH` | Heli probe directory |
+| `TRACER_NODE_BIN` | Node for fake ACP |
+| `TRACER_E2E_PROFILE` | `debug` \| `release` |
+| `TRACER_E2E_APP_BINARY` | Override app binary path |
+| `TRACER_TAURI_DRIVER_PORT` | Default `4444` |
+| `TRACER_NATIVE_DRIVER` | Path to msedgedriver / WebKitWebDriver |
 
-## Preferred full GUI path (follow-up)
+## Layout
 
 ```text
-launch built desktop app (TRACER_* env)
-→ frontend loads
-→ __TAURI__.core.invoke available
-→ snapshot / session / prompt / stream / approval / cancel
-→ close → reopen → history
+tools/tauri-e2e/
+  run.mjs           orchestrator (L0/L1 + flags)
+  doctor.mjs        environment discovery
+  l2-smoke.mjs      L2 launch smoke
+  l3i-infra.mjs     L3-I driver infrastructure
+  lib/
+    classify.mjs
+    discover.mjs
+    process.mjs
+    stages.mjs
+    webdriver.mjs
+tools/tauri-driver/ install + start helpers
 ```
-
-Requires: `tauri-driver` (or WebDriver for WebView2) + Playwright/Selenium bindings. Not required for W2-B acceptance.
 
 ## Related docs
 
-- `docs/modules/w2-b/W2_B_E2E_ARCHITECTURE.md`
-- `docs/modules/w2-b/W2_B_TEST_MATRIX.md`
-- `docs/modules/w2-b/W2_B_COMPLETION_REPORT.md`
+- `docs/modules/w2-2-a/W2_2_A_ARCHITECTURE.md`
+- `docs/modules/w2-2-a/W2_2_A_ENVIRONMENT_MATRIX.md`
+- `docs/modules/w2-2-a/W2_2_A_TEST_MATRIX.md`
+- `docs/modules/w2-2-a/W2_2_A_COMPLETION_REPORT.md`
+- `docs/modules/w2-b/W2_B_E2E_ARCHITECTURE.md` (Gate 2.1 L0/L1)

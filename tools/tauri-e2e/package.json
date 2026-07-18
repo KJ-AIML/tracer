@@ -1,14 +1,20 @@
 {
   "name": "@tracer/tauri-e2e",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "W2-B Tauri desktop boundary E2E harness (fake ACP, no network, no credentials)",
+  "description": "W2.2-A Tauri E2E infrastructure: doctor, L0-L1 boundary, L2 smoke, L3-I driver infra (not L3-J product journey)",
   "scripts": {
     "test": "node ./run.mjs",
     "test:policy": "node ./run.mjs --policy-only",
     "test:boundary": "node ./run.mjs --boundary-only",
-    "test:gui-probe": "node ./run.mjs --gui-probe"
+    "test:gui-probe": "node ./run.mjs --gui-probe",
+    "doctor": "node ./doctor.mjs",
+    "doctor:json": "node ./doctor.mjs --json",
+    "test:l2": "node ./l2-smoke.mjs",
+    "test:l3i": "node ./l3i-infra.mjs",
+    "test:all": "node ./run.mjs --all",
+    "test:tauri-e2e:doctor": "node ./doctor.mjs"
   },
   "engines": {
     "node": ">=20"

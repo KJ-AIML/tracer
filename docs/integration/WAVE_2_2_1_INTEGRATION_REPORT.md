@@ -66,7 +66,7 @@ L3-J: NOT_STARTED
 |---|---|
 | `f4b9df8efa99a074661d9ecbc4244996dcec33da` | `fix(w2.2.1): register test:tauri-e2e:doctor and rustfmt drain lifecycle` |
 | `4a5ba8b50aa205684e50c20f268e362f50a0d824` | `test(w2.2.1): remove noop phase assert in drain_lifecycle` |
-| *(docs commit)* | `docs(w2.2.1): Gate 2.2.1 integration reports and contracts` |
+| `99ae5e9008202401a043febe23df7d760ccde85a` | `docs(w2.2.1): Gate 2.2.1 integration reports and contracts` |
 
 ## 6. Conflicts and reconciliations
 
@@ -145,12 +145,12 @@ L2 stages: app_launch → readiness → smoke → app_shutdown → orphan_verifi
 
 See `docs/integration/W2_2_B_ENTRY_CRITERIA.md`. **No W2.2-B task created or claimed.**
 
-## 10. Final tip (filled on PASS finalize)
+## 10. Final tip
 
 | Item | Value |
 |---|---|
-| Integration / main tip | *(filled after FF + tag)* |
-| Local tag | `tracer-wave2.2.1-e2e-foundation` |
+| Integration artifacts tip (docs) | `99ae5e9008202401a043febe23df7d760ccde85a` |
+| Local tag | `tracer-wave2.2.1-e2e-foundation` (points at main after FF) |
 | Remote push | **none** |
 
 ### SHA table
@@ -164,4 +164,4 @@ See `docs/integration/W2_2_B_ENTRY_CRITERIA.md`. **No W2.2-B task created or cla
 | merge A | `e2e54fc361bb7175801c7e339e2f4257332eca1a` |
 | tooling + rustfmt | `f4b9df8efa99a074661d9ecbc4244996dcec33da` |
 | drain test fix | `4a5ba8b50aa205684e50c20f268e362f50a0d824` |
-| docs gate artifacts | *(set after docs commit; tip after FF in §10)* |
+| docs gate artifacts | `99ae5e9008202401a043febe23df7d760ccde85a` |

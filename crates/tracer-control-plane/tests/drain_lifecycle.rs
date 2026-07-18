@@ -179,12 +179,8 @@ async fn prompt_return_before_terminal_drain() {
     let prompt_return_ms = t0.elapsed().as_millis();
 
     // After adapter return, session must still be live (ingestion not torn down).
+    // Drain phase may already be past AdapterOperationReturned; live registry is the gate.
     assert_eq!(cp.live_session_count(), 1);
-    let phase_ok = matches!(
-        // phase may already be past AdapterOperationReturned
-        true, true
-    );
-    assert!(phase_ok);
 
     // Terminal should become durable within grace even if return raced.
     let deadline = Instant::now() + LATE_EVENT_GRACE + Duration::from_secs(5);

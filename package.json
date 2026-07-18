@@ -14,6 +14,7 @@
     "test:ui": "pnpm --filter @tracer/ui test",
     "test:desktop": "pnpm --filter @tracer/desktop test",
     "test:tauri-e2e": "node tools/tauri-e2e/run.mjs",
+    "test:tauri-e2e:doctor": "node tools/tauri-e2e/doctor.mjs",
     "validate:js": "pnpm -r run build && pnpm -r run test"
   }
 }

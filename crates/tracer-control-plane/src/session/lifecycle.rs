@@ -120,7 +120,9 @@ pub fn is_prompt_terminal_event(event_type: &str) -> bool {
 pub fn is_run_terminal_status(status: SessionStatus) -> bool {
     matches!(
         status,
-        SessionStatus::Failed | SessionStatus::Disconnected | SessionStatus::Stopped
+        SessionStatus::Failed
+            | SessionStatus::Disconnected
+            | SessionStatus::Stopped
             | SessionStatus::Completed
     )
 }

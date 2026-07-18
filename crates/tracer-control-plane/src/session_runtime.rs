@@ -244,7 +244,9 @@ impl SessionRuntimeState {
         self.prompt_in_flight = true;
         self.terminal_persisted = false;
         self.last_terminal_event = None;
-        self.drain_phase = self.drain_phase.advance_to(DrainLifecyclePhase::PromptActive);
+        self.drain_phase = self
+            .drain_phase
+            .advance_to(DrainLifecyclePhase::PromptActive);
     }
 
     /// Record that the adapter operation returned (ingestion may still be active).
@@ -720,12 +722,10 @@ async fn persist_one(
                             attempt,
                             "persist unique conflict; retrying"
                         );
-                        last_err = Some(tracer_storage::StorageError::AlreadyExists {
-                            entity,
-                            id,
-                        });
+                        last_err = Some(tracer_storage::StorageError::AlreadyExists { entity, id });
                         // Brief yield so peer writers / next_sequence advance.
-                        tokio::time::sleep(Duration::from_millis(5 * (1u64 << attempt.min(4)))).await;
+                        tokio::time::sleep(Duration::from_millis(5 * (1u64 << attempt.min(4))))
+                            .await;
                     }
                     Err(e) => {
                         // Transient database lock / IO: retry. Other errors also
@@ -737,7 +737,8 @@ async fn persist_one(
                             "persist attempt failed; may retry"
                         );
                         last_err = Some(e);
-                        tokio::time::sleep(Duration::from_millis(15 * (1u64 << attempt.min(4)))).await;
+                        tokio::time::sleep(Duration::from_millis(15 * (1u64 << attempt.min(4))))
+                            .await;
                     }
                 }
             }
@@ -951,8 +952,7 @@ fn apply_event_to_state(
         LateEventDisposition::ApplyFully => {}
     }
 
-    let terminal = hard_terminal
-        || (st.terminal_persisted && is_run_terminal_status(st.status));
+    let terminal = hard_terminal || (st.terminal_persisted && is_run_terminal_status(st.status));
 
     match event_type {
         "session.completed" if !hard_terminal && st.status != SessionStatus::Cancelling => {

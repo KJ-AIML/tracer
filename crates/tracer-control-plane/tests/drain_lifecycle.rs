@@ -182,8 +182,7 @@ async fn prompt_return_before_terminal_drain() {
     assert_eq!(cp.live_session_count(), 1);
     let phase_ok = matches!(
         // phase may already be past AdapterOperationReturned
-        true,
-        true
+        true, true
     );
     assert!(phase_ok);
 
@@ -337,7 +336,10 @@ async fn normal_channel_close_does_not_increment_persist_errors() {
         .expect("prompt after channel close peer");
     assert!(p.accepted);
     let m2 = cp.session_ingest_metrics(&s2.session_id).unwrap();
-    assert_eq!(m2.persist_errors, 0, "false persist error after channel close");
+    assert_eq!(
+        m2.persist_errors, 0,
+        "false persist error after channel close"
+    );
 
     let _ = cp.shutdown_all().await;
 }
@@ -471,9 +473,8 @@ async fn approval_during_concurrent_drain() {
     let cp = std::sync::Arc::new(cp);
     let cp_p = std::sync::Arc::clone(&cp);
     let sid_p = sid.clone();
-    let prompt = tokio::spawn(async move {
-        cp_p.session_submit_prompt(&sid_p, "needs permission").await
-    });
+    let prompt =
+        tokio::spawn(async move { cp_p.session_submit_prompt(&sid_p, "needs permission").await });
 
     // Wait for pending approval then resolve while drain continues.
     let deadline = Instant::now() + Duration::from_secs(8);
@@ -533,7 +534,10 @@ async fn shutdown_during_late_drain() {
 
     assert_eq!(cp.live_session_count(), 0);
     // History remains listable after joined shutdown.
-    let events = cp.events_list(&sid, 0, 500).await.expect("history after shutdown");
+    let events = cp
+        .events_list(&sid, 0, 500)
+        .await
+        .expect("history after shutdown");
     assert!(
         sequences_uniqueish(&events.events),
         "no duplicate sequences after shutdown race"
@@ -598,29 +602,35 @@ async fn multi_session_independent_drains() {
     let ma = cp.session_ingest_metrics(&a.session_id).unwrap();
     let mb = cp.session_ingest_metrics(&b.session_id).unwrap();
     assert_eq!(
-        ma.persist_errors, 0,
+        ma.persist_errors,
+        0,
         "A false persist_errors={ma:?} last={:?}",
-        cp.session_get(&a.session_id).await.ok().map(|s| s.last_error)
+        cp.session_get(&a.session_id)
+            .await
+            .ok()
+            .map(|s| s.last_error)
     );
     assert_eq!(
-        mb.persist_errors, 0,
+        mb.persist_errors,
+        0,
         "B false persist_errors={mb:?} last={:?}",
-        cp.session_get(&b.session_id).await.ok().map(|s| s.last_error)
+        cp.session_get(&b.session_id)
+            .await
+            .ok()
+            .map(|s| s.last_error)
     );
     assert!(ma.events_persisted > 0 && mb.events_persisted > 0);
 
     let ea = cp.events_list(&a.session_id, 0, 200).await.unwrap();
     let eb = cp.events_list(&b.session_id, 0, 200).await.unwrap();
-    assert!(ea.events.iter().all(|e| {
-        e.get("sessionId")
-            .and_then(|s| s.as_str())
-            == Some(a.session_id.as_str())
-    }));
-    assert!(eb.events.iter().all(|e| {
-        e.get("sessionId")
-            .and_then(|s| s.as_str())
-            == Some(b.session_id.as_str())
-    }));
+    assert!(ea
+        .events
+        .iter()
+        .all(|e| { e.get("sessionId").and_then(|s| s.as_str()) == Some(a.session_id.as_str()) }));
+    assert!(eb
+        .events
+        .iter()
+        .all(|e| { e.get("sessionId").and_then(|s| s.as_str()) == Some(b.session_id.as_str()) }));
 
     let _ = cp.shutdown_all().await;
 }
@@ -688,9 +698,7 @@ async fn later_session_not_poisoned() {
         .await
         .unwrap();
     set_test_force_persist_error(true);
-    let _ = cp
-        .session_submit_prompt(&bad.session_id, "fail me")
-        .await;
+    let _ = cp.session_submit_prompt(&bad.session_id, "fail me").await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     let m_bad = cp.session_ingest_metrics(&bad.session_id).unwrap();
     assert!(m_bad.persist_errors > 0);
@@ -737,10 +745,7 @@ async fn drain_phase_advances_past_prompt_return() {
 
     // After successful prompt, metrics prove drain advanced past return.
     let m = cp.session_ingest_metrics(&session.session_id).unwrap();
-    assert!(
-        m.events_persisted > 0,
-        "drain active after prompt: {m:?}"
-    );
+    assert!(m.events_persisted > 0, "drain active after prompt: {m:?}");
     assert!(
         m.terminal_persisted > 0 || m.presentation_sends > 0 || m.bridge_accepted > 0,
         "expected lifecycle progress metrics={m:?}"

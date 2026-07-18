@@ -114,11 +114,7 @@ async fn stress_overlapping_sessions_independent_drains() {
             break;
         }
         match cp
-            .session_create(
-                &proj.project_id,
-                Some(format!("dl-ov-{i}")),
-                happy_opts(),
-            )
+            .session_create(&proj.project_id, Some(format!("dl-ov-{i}")), happy_opts())
             .await
         {
             Ok(s) => ids.push(s.session_id),
@@ -242,8 +238,5 @@ async fn stress_cancel_and_shutdown_races() {
     assert_eq!(cp.live_session_count(), 0);
 
     std::env::remove_var("TRACER_SOAK_PERSIST_DELAY_MS");
-    eprintln!(
-        "[stress_dl_race] duration_ms={}",
-        t0.elapsed().as_millis()
-    );
+    eprintln!("[stress_dl_race] duration_ms={}", t0.elapsed().as_millis());
 }

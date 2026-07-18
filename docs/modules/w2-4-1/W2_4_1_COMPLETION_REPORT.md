@@ -9,7 +9,7 @@
 | Heli session | `heli-ses-7c596a03-9e8d-4054-82b0-1b55164dbe6b` |
 | Branch | `agent/tracer-w2-upgrade-fixture` |
 | Base SHA | `4c5f5599df16325f39da1b3165d7c02be94ac0a4` |
-| Tip SHA | `d70ca9aec8da7bf030632569de691edb7818ac46` |
+| Tip SHA | `8e11b6371a14c0fd75348383ac53df634b47b2ee` (pin commit; final tip after this update recorded in coordinator return) |
 | Host | grok-build |
 
 ## Decisions (Part 13)
@@ -46,6 +46,16 @@ All PASS — see test matrix / upgrade results.
 ## Manifest / provenance
 
 `pnpm release:provenance` + verify **PASS**; signing `UNSIGNED_DEVELOPMENT_RC`.
+
+## Commits
+
+| SHA | Message |
+|---|---|
+| `b7b1e82` | feat(storage): add schema v2 migration and upgrade safety guards |
+| `b952fe8` | chore(desktop): bump package version to 0.1.1 for N+1 RC |
+| `700ff07` | feat(release): add upgrade fixture and release provenance tooling |
+| `d70ca9a` | docs(w2.4.1): record upgrade architecture, matrix, and host results |
+| `8e11b63` | docs(w2.4.1): pin completion report tip SHA |
 
 ## Residual risks
 

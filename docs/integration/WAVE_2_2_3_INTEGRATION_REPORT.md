@@ -1,4 +1,4 @@
-﻿# Wave 2.2.3 Integration Report — Full WebView GUI Product Journey (L3-J)
+# Wave 2.2.3 Integration Report — Full WebView GUI Product Journey (L3-J)
 
 **Gate:** 2.2.3 (Full WebView GUI product journey L3-J on main)  
 **Task:** `tracer-w2-webview-gui-journey-integration`  
@@ -78,7 +78,7 @@ Merge strategy: `git merge --no-ff` (`ort`) — worker provenance retained.
 | `af58fb5df7799d73f9192c1bdf6a5deb9d2ef308` | `fix(w2.2.3): harden --tracer-e2e-env allowlist, absolute path, negative tests` |
 | `97a3044b7ef8c9fb10397d103e8d6260e17ed0c4` | `fix(w2.2.3): selector priority helpers (label/role with testid fallback)` |
 | `8b6864faf0453ffb0fe2da3d7e5726c34d4cd286` | `fix(w2.2.3): sanitize L3-J failure artifacts (no secrets)` (+ rustfmt) |
-| *(docs commit)* | `docs(w2.2.3): Gate 2.2.3 integration reports and contracts` |
+| | `0cada17213b58a4352e1fca9008dad4d9479f463` | `docs(w2.2.3): Gate 2.2.3 integration reports and contracts` |
 
 ## 6. Conflicts and reconciliations
 
@@ -217,6 +217,6 @@ See `docs/integration/WAVE_2_3_ENTRY_CRITERIA.md`.
 
 | Item | Value |
 |---|---|
-| Integration branch tip (pre-docs) | `8b6864faf0453ffb0fe2da3d7e5726c34d4cd286` |
+| Integration docs tip | `0cada17213b58a4352e1fca9008dad4d9479f463` |
 | Merge commit | `38d70cf8a14596196d235152c8fcab6dd75d8a9f` |
 | Remote push | **none** |

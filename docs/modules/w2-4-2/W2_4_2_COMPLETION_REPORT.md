@@ -11,7 +11,7 @@
 | Branch | `agent/tracer-w2-signing-readiness` |
 | Worktree | `repos/worktrees/tracer-w2-4-2-a` |
 | Base SHA | `d83a873f0cbad9478ee311315e53f6ca22035970` |
-| Tip SHA | `2a541459babca04b5a08c8466fff45e8e6cbf966` |
+| Tip SHA | `TIP_PLACEHOLDER` |
 
 Gate 2.4.1 footnote: prior integration session `heli-ses-26b01af7` (initial claim `heli-ses-ee781bf9`) is correct for that gate and is not reused as this task's identity.
 
@@ -20,9 +20,9 @@ Gate 2.4.1 footnote: prior integration session `heli-ses-26b01af7` (initial clai
 | Item | Result |
 |---|---|
 | OS | Windows 10.0.26200 win32/x64 |
-| signtool | Detected (Windows Kits 10) |
+| signtool | Detected under Windows Kits 10 (`…/bin/10.0.26100.0/x64/signtool.exe`) |
 | AzureSignTool | Not installed |
-| PowerShell Authenticode | Available (5.1.x) |
+| PowerShell Authenticode | Available (5.1.26100.8875) |
 | Trusted certificate | None |
 | Publisher subject env | Unset |
 
@@ -45,7 +45,7 @@ Detect `signtool` + PowerShell Authenticode; default `UNSIGNED`; self-signed mec
 ## Evidence highlights
 
 - Doctor: `READY_SELF_SIGNED_TEST_ONLY` / trusted `BLOCKED_NO_CERTIFICATE`
-- Self-signed: sign + verify + tamper reject + cleanup **PASS**
+- Self-signed: sign + verify + tamper reject + cleanup **PASS** (copies of RC artifacts; originals unchanged)
 - Provenance fields extended with explicit unsigned signing metadata
 - Standard CI isolation unit-tested (`CI` without release workflow refuses trusted sign)
 - No PFX/keys/passwords committed; no trusted-sign executed
@@ -66,13 +66,15 @@ Detect `signtool` + PowerShell Authenticode; default `UNSIGNED`; self-signed mec
 | `6522f09` | feat(release): add Authenticode signing readiness pipeline |
 | `b352d17` | docs(w2.4.2): record Authenticode signing architecture and results |
 | `2a54145` | docs(w2.4.2): pin completion report tip SHA |
+| `ea7999d` | docs(w2.4.2): finalize completion report tip pin |
+| `TIP_SHORT` | docs(w2.4.2): pin completion report tip SHA (final) |
 
 ## Residual risks
 
 1. No organization code-signing certificate — production Authenticode remains blocked.
 2. Timestamp authority not configured or live-probed.
 3. SmartScreen reputation unproven even after a future trusted signature.
-4. Full Windows RC rebuild may be required on clean hosts before signing real portable/NSIS copies (mechanics proven with compiled unsigned probe PE when RC absent).
+4. Trusted signing still requires explicit operator authorization and real material.
 5. `signtool` version string often unavailable via `/?`; path detection is authoritative.
 
 ## Integration recommendation

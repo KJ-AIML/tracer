@@ -1,4 +1,4 @@
-# W2.4.2-A Completion Report — Authenticode Signing Readiness
+﻿# W2.4.2-A Completion Report â€” Authenticode Signing Readiness
 
 ## Identity
 
@@ -11,7 +11,7 @@
 | Branch | `agent/tracer-w2-signing-readiness` |
 | Worktree | `repos/worktrees/tracer-w2-4-2-a` |
 | Base SHA | `d83a873f0cbad9478ee311315e53f6ca22035970` |
-| Tip SHA | `TIP_PLACEHOLDER` |
+| Tip SHA | `33560e76d9b7510b07eea612e869af5f82effa73` |
 
 Gate 2.4.1 footnote: prior integration session `heli-ses-26b01af7` (initial claim `heli-ses-ee781bf9`) is correct for that gate and is not reused as this task's identity.
 
@@ -20,7 +20,7 @@ Gate 2.4.1 footnote: prior integration session `heli-ses-26b01af7` (initial clai
 | Item | Result |
 |---|---|
 | OS | Windows 10.0.26200 win32/x64 |
-| signtool | Detected under Windows Kits 10 (`…/bin/10.0.26100.0/x64/signtool.exe`) |
+| signtool | Detected under Windows Kits 10 (`â€¦/bin/10.0.26100.0/x64/signtool.exe`) |
 | AzureSignTool | Not installed |
 | PowerShell Authenticode | Available (5.1.26100.8875) |
 | Trusted certificate | None |
@@ -28,7 +28,7 @@ Gate 2.4.1 footnote: prior integration session `heli-ses-26b01af7` (initial clai
 
 ## Selected architecture
 
-Detect `signtool` + PowerShell Authenticode; default `UNSIGNED`; self-signed mechanics via ephemeral test cert in OS temp; trusted path fails closed without authorization + cert. Production target: org OV/EV or managed cloud signing when available — **not provisioned in this task**.
+Detect `signtool` + PowerShell Authenticode; default `UNSIGNED`; self-signed mechanics via ephemeral test cert in OS temp; trusted path fails closed without authorization + cert. Production target: org OV/EV or managed cloud signing when available â€” **not provisioned in this task**.
 
 ## Decisions (Part 17)
 
@@ -67,11 +67,11 @@ Detect `signtool` + PowerShell Authenticode; default `UNSIGNED`; self-signed mec
 | `b352d17` | docs(w2.4.2): record Authenticode signing architecture and results |
 | `2a54145` | docs(w2.4.2): pin completion report tip SHA |
 | `ea7999d` | docs(w2.4.2): finalize completion report tip pin |
-| `TIP_SHORT` | docs(w2.4.2): pin completion report tip SHA (final) |
+| `33560e7` | docs(w2.4.2): pin completion report tip SHA (final) |
 
 ## Residual risks
 
-1. No organization code-signing certificate — production Authenticode remains blocked.
+1. No organization code-signing certificate â€” production Authenticode remains blocked.
 2. Timestamp authority not configured or live-probed.
 3. SmartScreen reputation unproven even after a future trusted signature.
 4. Trusted signing still requires explicit operator authorization and real material.

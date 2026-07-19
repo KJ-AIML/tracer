@@ -87,3 +87,16 @@ Build outputs under `target/` (not committed):
 - Code signing cert procurement
 - MSI production for this RC
 - macOS / Linux installers
+
+## Authenticode signing (W2.4.2-A)
+
+Modes: `UNSIGNED` (default) | `SELF_SIGNED_TEST` | `TRUSTED_AUTHENTICODE`.
+
+``text
+pnpm release:sign:doctor
+pnpm release:sign:test
+pnpm release:sign
+pnpm release:verify-signature
+``
+
+Trusted signing requires `TRACER_SIGNING_AUTHORIZED=1` plus real certificate material. Self-signed proves pipeline mechanics only. See `docs/modules/w2-4-2/`.

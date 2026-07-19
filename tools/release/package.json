@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "W2.3-A Windows release candidate packaging and validation",
+  "description": "Windows release packaging, provenance, and Authenticode signing readiness (W2.3-A / W2.4.2-A)",
   "scripts": {
     "release:windows": "node ./windows-rc.mjs",
     "validate:windows": "node ./validate-windows.mjs",
@@ -11,7 +11,12 @@
     "provenance:generate": "node ./generate-provenance.mjs",
     "provenance:verify": "node ./verify-provenance.mjs",
     "identity": "node ./identity-check.mjs",
-    "classify-signing": "node ./classify-signing.mjs"
+    "classify-signing": "node ./classify-signing.mjs",
+    "release:sign:doctor": "node ./sign-doctor.mjs",
+    "release:sign:test": "node ./sign-test.mjs",
+    "release:sign": "node ./sign.mjs",
+    "release:verify-signature": "node ./verify-signature.mjs",
+    "test": "node --test ../../tests/release/windows/signing/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

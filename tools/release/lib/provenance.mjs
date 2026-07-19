@@ -16,6 +16,13 @@ import { REPO_ROOT, releaseStageDir } from "./paths.mjs";
 import { checkIdentity } from "./identity.mjs";
 import { classifyReleaseSigning } from "./signing.mjs";
 import { discoverArtifacts } from "./artifacts.mjs";
+import {
+  inspectAuthenticode,
+  signingFieldsFromVerify,
+  unsignedSigningFields,
+} from "../signing/verify.mjs";
+import { SIGNING_MODES } from "../signing/modes.mjs";
+import { detectSigningTools } from "../signing/detect-tools.mjs";
 
 export const PROVENANCE_SCHEMA_VERSION = 1;
 export const PROVENANCE_KIND = "tracer-release-provenance";
@@ -67,7 +74,7 @@ function toolchain() {
 /**
  * Build a single artifact provenance entry (relative paths only).
  */
-export function artifactEntry(absPath, artifactType) {
+export function artifactEntry(absPath, artifactType, signingMeta = {}) {
   if (!absPath || !existsSync(absPath)) {
     return null;
   }
@@ -75,12 +82,71 @@ export function artifactEntry(absPath, artifactType) {
   const rel = path.relative(REPO_ROOT, absPath).replace(/\\/g, "/");
   // Refuse absolute-dev-path leakage in filename field.
   const filename = path.basename(absPath);
+  const sha256 = sha256File(absPath);
+  let signingFields = unsignedSigningFields();
+  try {
+    if (process.platform === "win32") {
+      const insp = inspectAuthenticode(absPath);
+      if (!insp.signaturePresent) {
+        signingFields = {
+          ...unsignedSigningFields(),
+          artifactSha256: sha256,
+          preSignSha256: sha256,
+          postSignSha256: null,
+        };
+      } else {
+        const v = {
+          ...insp,
+          artifactSha256: sha256,
+          signingMode:
+            signingMeta.signingMode || SIGNING_MODES.SELF_SIGNED_TEST,
+          classification: insp.signatureStatus,
+          valid: insp.signatureStatus === "Valid",
+        };
+        signingFields = signingFieldsFromVerify(v, {
+          artifactSha256: sha256,
+          preSignSha256: signingMeta.preSignSha256 ?? null,
+          postSignSha256: sha256,
+          signingTool: signingMeta.signingTool ?? null,
+          signingToolVersion: signingMeta.signingToolVersion ?? null,
+        });
+      }
+    } else {
+      signingFields = {
+        ...unsignedSigningFields(),
+        artifactSha256: sha256,
+        preSignSha256: sha256,
+        signatureStatus: "UNSUPPORTED_PLATFORM",
+      };
+    }
+  } catch {
+    signingFields = {
+      ...unsignedSigningFields(),
+      artifactSha256: sha256,
+      preSignSha256: sha256,
+    };
+  }
   return {
     artifactType,
     filename,
     relativePath: rel.startsWith("..") ? filename : rel,
     sizeBytes: st.size,
-    sha256: sha256File(absPath),
+    sha256,
+    // W2.4.2-A Part 10 — explicit signing fields (never omit for unsigned)
+    artifactSha256: signingFields.artifactSha256 ?? sha256,
+    preSignSha256: signingFields.preSignSha256,
+    postSignSha256: signingFields.postSignSha256,
+    signaturePresent: signingFields.signaturePresent,
+    signatureStatus: signingFields.signatureStatus,
+    certificateSubject: signingFields.certificateSubject,
+    certificateThumbprint: signingFields.certificateThumbprint,
+    certificateIssuer: signingFields.certificateIssuer,
+    certificateValidity: signingFields.certificateValidity,
+    timestampPresent: signingFields.timestampPresent,
+    timestampAuthority: signingFields.timestampAuthority,
+    signingMode: signingFields.signingMode,
+    signingTool: signingFields.signingTool,
+    signingToolVersion: signingFields.signingToolVersion,
   };
 }
 
@@ -141,7 +207,9 @@ export function generateProvenance(opts = {}) {
     identifier: identity.identity?.identifier || "dev.tracer.desktop",
     signing: {
       class: opts.signingClass || signing.class,
-      note: "provenance records signing class; it does not prove Authenticode",
+      mode: opts.signingMode || SIGNING_MODES.UNSIGNED,
+      note: "provenance records signing class/mode; it does not prove Authenticode trust or SmartScreen",
+      tool: detectSigningTools().preferred,
     },
     buildToolchain: toolchain(),
     artifacts,

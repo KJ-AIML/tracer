@@ -53,3 +53,11 @@ Thumbs.db
 artifacts/
 target/release-rc/
 
+
+# === Code signing secrets / material (never commit) ===
+*.pfx
+*.p12
+*.pem.key
+**/code-sign/
+**/signing-secrets/
+*.code-sign.json

@@ -3,3 +3,4 @@ packages:
   - "packages/*"
   - "tools/*"
   - "tests/contract/*"
+  - "tests/release/windows/signing"

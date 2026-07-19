@@ -79,6 +79,8 @@ importers:
 
   tests/contract/fake-runtime: {}
 
+  tests/release/windows/signing: {}
+
   tools/fake-acp-runtime: {}
 
   tools/release: {}

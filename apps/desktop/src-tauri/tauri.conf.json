@@ -28,7 +28,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "Tracer",
     "category": "DeveloperTool",
     "shortDescription": "Tracer desktop shell for ACP session observability",
@@ -43,7 +45,7 @@
     "useLocalToolsDir": true,
     "windows": {
       "certificateThumbprint": null,
-      "digestAlgorithm": null,
+      "digestAlgorithm": "sha256",
       "timestampUrl": null,
       "tsp": false,
       "allowDowngrades": true,

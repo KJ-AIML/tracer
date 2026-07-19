@@ -11,7 +11,7 @@
 | Branch | `agent/tracer-w2-signing-readiness` |
 | Worktree | `repos/worktrees/tracer-w2-4-2-a` |
 | Base SHA | `d83a873f0cbad9478ee311315e53f6ca22035970` |
-| Tip SHA | `PENDING_DOCS_COMMIT` |
+| Tip SHA | `b352d17c550ba1549117dc26b161275f6d61ed51` |
 
 Gate 2.4.1 footnote: prior integration session `heli-ses-26b01af7` (initial claim `heli-ses-ee781bf9`) is correct for that gate and is not reused as this task's identity.
 
@@ -58,6 +58,14 @@ Detect `signtool` + PowerShell Authenticode; default `UNSIGNED`; self-signed mec
 - `tests/release/windows/signing/*`
 - `docs/modules/w2-4-2/*`, `docs/validation/release/*` (signing/SmartScreen/secrets/results)
 - Root/`@tracer/release` scripts; minimal `tauri.conf.json` `digestAlgorithm: sha256`
+
+## Commits
+
+| SHA | Message |
+|---|---|
+| `6522f09` | feat(release): add Authenticode signing readiness pipeline |
+| `b352d17` | docs(w2.4.2): record Authenticode signing architecture and results |
+| `PENDING_PIN` | docs(w2.4.2): pin completion report tip SHA |
 
 ## Residual risks
 

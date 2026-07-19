@@ -69,8 +69,8 @@ Not a typo. Gate 2.4.1 historical reports were **not** rewritten. This Gate 2.4.
 | Role | SHA | Message |
 |---|---|---|
 | Merge (`--no-ff`) | `224cdab6a4eb44e615689f9a7be9f080b6ecb7da` | `merge(w2.4.2-i): integrate W2.4.2-A Authenticode signing readiness` |
-| Provenance schema reconcile | *(this docs commit)* | artifact signing fields made explicit in fixture schema |
-| Gate reports | *(this docs commit)* | Gate 2.4.2 integration artifacts |
+| Provenance schema reconcile | `7419bb991edbf8dec36ee85f0deda09aa81f6623` | artifact signing fields made explicit in fixture schema |
+| Gate reports | `7419bb991edbf8dec36ee85f0deda09aa81f6623` | Gate 2.4.2 integration artifacts |
 
 No squash. Scope audit: OWN paths only (`tools/release/signing/`, `tools/release/`, `tests/release/windows/signing/`, `docs/modules/w2-4-2/`, `docs/validation/release/`, minimal root scripts / `.gitignore` / `digestAlgorithm: sha256`). No unrelated domain/process/storage/runtime/control-plane/desktop `src` changes.
 
@@ -154,7 +154,7 @@ Material flags: trusted cert=**no**; real private key=**no**; trusted timestamp=
 | Baseline main (Gate 2.4.1) | `d83a873f0cbad9478ee311315e53f6ca22035970` |
 | W2.4.2-A tip | `6ed4f7acbc2308a07f5f48bba2f82abe564c20a7` |
 | Merge | `224cdab6a4eb44e615689f9a7be9f080b6ecb7da` |
-| Gate 2.4.2 reports / schema | *(tip after this commit; pin in follow-up if needed)* |
+| Gate 2.4.2 reports / schema | `7419bb991edbf8dec36ee85f0deda09aa81f6623` |
 
 ## 13. Residual risks
 

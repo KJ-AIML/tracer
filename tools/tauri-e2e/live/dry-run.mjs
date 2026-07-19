@@ -65,8 +65,13 @@ function main() {
     id: "opt_in_gates_documented",
     ok: true,
     detail: {
-      env: ["TRACER_LIVE_GROK=1", "TRACER_LIVE_GUI=1"],
+      env: [
+        "TRACER_LIVE_GROK=1",
+        "TRACER_LIVE_GUI=1",
+        "TRACER_LIVE_GUI_AUTHORIZED=1",
+      ],
       command: "node tools/tauri-e2e/live/lgj.mjs run",
+      dryRunAuthorizationRequired: false,
     },
   });
   checks.push({
@@ -93,8 +98,8 @@ function main() {
   const report = {
     schemaVersion: 1,
     harness: "tools/tauri-e2e/live",
-    workItem: "W2.3-B",
-    task: "tracer-w2-live-gui-validation",
+    workItem: "W2.4.3-A",
+    task: "tracer-w2-live-gui-execution",
     classificationTier: OPERATION_CLASS,
     classification: LgjClass.NOT_RUN,
     constructionPass,
@@ -112,7 +117,8 @@ function main() {
     notes: [
       "Dry-run never spawns grok agent stdio",
       "Dry-run never launches Tauri GUI",
-      "Live requires TRACER_LIVE_GROK=1 + TRACER_LIVE_GUI=1 + run/--live",
+      "Live requires TRACER_LIVE_GROK=1 + TRACER_LIVE_GUI=1 + TRACER_LIVE_GUI_AUTHORIZED=1 + run/--live",
+      "Dry-run does not require TRACER_LIVE_GUI_AUTHORIZED (provider-free)",
       "Approval RR PASS never claimed without observed reverse-request",
     ],
     suiteResult: classification,

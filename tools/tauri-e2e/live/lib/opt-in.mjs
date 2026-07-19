@@ -1,12 +1,13 @@
 ﻿/**
- * Opt-in gates for Live Grok GUI validation (W2.3-B).
+ * Opt-in gates for Live Grok GUI validation (W2.3-B / W2.4.3-A).
  *
- * Live requires BOTH:
+ * Live requires ALL of:
  *   TRACER_LIVE_GROK=1  (or TRACER_LIVE_SMOKE=1)
  *   TRACER_LIVE_GUI=1
- * OR explicit CLI --live / run subcommand.
+ *   TRACER_LIVE_GUI_AUTHORIZED=1  (operator authorization — W2.4.3-A)
+ *   explicit CLI `run` / `--live`
  *
- * Dry-run never requires env gates and never spawns live Grok.
+ * Dry-run never requires env gates (including authorization) and never spawns live Grok.
  */
 
 export const OPERATION_CLASS = "manual_local_live_authenticated_gui";
@@ -47,23 +48,41 @@ export function envLiveGui() {
   return process.env.TRACER_LIVE_GUI === "1";
 }
 
+/** W2.4.3-A operator authorization gate — separate from dual opt-in. */
+export function envLiveGuiAuthorized() {
+  return process.env.TRACER_LIVE_GUI_AUTHORIZED === "1";
+}
+
 /**
- * Live dual-gate: env pair OR explicit --live with both envs.
- * Returns { ok, reason, operationClass }
+ * Snapshot of live opt-in / authorization env (for reports; never prints secrets).
+ */
+export function liveEnvSnapshot() {
+  return {
+    TRACER_LIVE_GROK: envLiveGrok(),
+    TRACER_LIVE_GUI: envLiveGui(),
+    TRACER_LIVE_GUI_AUTHORIZED: envLiveGuiAuthorized(),
+  };
+}
+
+/**
+ * Live triple-gate: env pair + operator authorization + explicit run/--live.
+ * Returns { ok, reason, operationClass, grok, gui, authorized }
  */
 export function checkLiveOptIn(cli) {
   const grok = envLiveGrok();
   const gui = envLiveGui();
+  const authorized = envLiveGuiAuthorized();
   const explicit = Boolean(cli.live);
 
   if (!explicit && !(grok && gui)) {
     return {
       ok: false,
       reason:
-        "Live GUI requires TRACER_LIVE_GROK=1 and TRACER_LIVE_GUI=1 plus `run`/`--live`. Use `dry-run` for plan-only.",
+        "Live GUI requires TRACER_LIVE_GROK=1, TRACER_LIVE_GUI=1, TRACER_LIVE_GUI_AUTHORIZED=1, plus `run`/`--live`. Use `dry-run` for plan-only.",
       operationClass: OPERATION_CLASS,
       grok,
       gui,
+      authorized,
     };
   }
   if (!grok) {
@@ -73,6 +92,7 @@ export function checkLiveOptIn(cli) {
       operationClass: OPERATION_CLASS,
       grok,
       gui,
+      authorized,
     };
   }
   if (!gui && !explicit) {
@@ -82,6 +102,7 @@ export function checkLiveOptIn(cli) {
       operationClass: OPERATION_CLASS,
       grok,
       gui,
+      authorized,
     };
   }
   // Require explicit run intent even when envs set (safety dual-gate)
@@ -93,6 +114,7 @@ export function checkLiveOptIn(cli) {
       operationClass: OPERATION_CLASS,
       grok,
       gui,
+      authorized,
     };
   }
   // If --live without TRACER_LIVE_GUI, still require both envs for belt+suspenders
@@ -103,6 +125,18 @@ export function checkLiveOptIn(cli) {
       operationClass: OPERATION_CLASS,
       grok,
       gui,
+      authorized,
+    };
+  }
+  if (!authorized) {
+    return {
+      ok: false,
+      reason:
+        "TRACER_LIVE_GUI_AUTHORIZED=1 required for live GUI (operator authorization gate — W2.4.3-A)",
+      operationClass: OPERATION_CLASS,
+      grok: true,
+      gui: true,
+      authorized: false,
     };
   }
   return {
@@ -111,7 +145,46 @@ export function checkLiveOptIn(cli) {
     operationClass: OPERATION_CLASS,
     grok: true,
     gui: true,
+    authorized: true,
   };
+}
+
+/**
+ * Sanitized execution plan printed before any provider-capable live path (W2.4.3-A).
+ * @param {{ journeyIds: string[], promptOverride?: string|null }} opts
+ */
+export function printExecutionPlan({ journeyIds, promptOverride = null }) {
+  const ids = journeyIds?.length ? journeyIds : [
+    "LGJ-01", "LGJ-02", "LGJ-03", "LGJ-04", "LGJ-05", "LGJ-06", "LGJ-07",
+  ];
+  const budget = {
+    "LGJ-01": 0,
+    "LGJ-02": 1,
+    "LGJ-03": 1,
+    "LGJ-04": 0,
+    "LGJ-05": 2,
+    "LGJ-06": 0,
+    "LGJ-07": 0,
+  };
+  const selectedBudget = ids.reduce((n, id) => n + (budget[id] ?? 0), 0);
+  console.log("");
+  console.log("=== LIVE EXECUTION PLAN (sanitized) ===");
+  console.log(`scenarioIds:           ${ids.join(", ")}`);
+  console.log(`providerPromptBudget:  hard max ~3 (selected plan: ${selectedBudget})`);
+  console.log(`maxPromptLength:       ${500} chars (MAX_PROMPT_CHARS)`);
+  console.log(`maxAttempts:           1 per journey; LGJ-05 max 1-2 approval observe cycles`);
+  console.log(`maxRuntime:            soft wall 30m (SUITE_SOFT_WALL_MS)`);
+  console.log(`cancellationScenarios: LGJ-03 (cancel mid-stream; deadlock budget 45s)`);
+  console.log(`approvalPolicy:        LGJ-05 PASS only if RR observed; never fabricate`);
+  console.log(`artifactRetention:     artifacts/tauri-e2e-live/<runId>/ (sanitized; gitignored)`);
+  console.log(`providerUsageClass:    manual_local_live_authenticated_gui / BOUNDED`);
+  if (promptOverride) {
+    console.log(`promptOverride:        yes (${String(promptOverride).length} chars, public-safe only)`);
+  } else {
+    console.log("promptOverride:        no (stock public-safe defaults)");
+  }
+  console.log("=======================================");
+  console.log("");
 }
 
 /** Print operation class banner before any provider-capable path. */

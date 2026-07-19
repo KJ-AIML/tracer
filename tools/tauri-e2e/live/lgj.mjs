@@ -9,7 +9,8 @@
  *   → cleanup → orphan check
  *
  * Opt-in:
- *   TRACER_LIVE_GROK=1  AND  TRACER_LIVE_GUI=1  AND  `run`/`--live`
+ *   TRACER_LIVE_GROK=1  AND  TRACER_LIVE_GUI=1  AND  TRACER_LIVE_GUI_AUTHORIZED=1
+ *   AND  `run`/`--live`
  *
  * Dry-run:
  *   node tools/tauri-e2e/live/dry-run.mjs
@@ -60,6 +61,7 @@ import {
   parseArgs,
   checkLiveOptIn,
   printOperationClass,
+  printExecutionPlan,
   isSecretLookingPrompt,
   DEFAULT_STREAM_PROMPT,
   DEFAULT_APPROVAL_PROMPT,
@@ -93,6 +95,7 @@ USAGE:
 ENV (live):
   TRACER_LIVE_GROK=1   (or TRACER_LIVE_SMOKE=1)
   TRACER_LIVE_GUI=1
+  TRACER_LIVE_GUI_AUTHORIZED=1   (operator authorization — W2.4.3-A)
   TRACER_GROK_BIN      optional grok path
   GROK_HOME            optional hermetic/operator home
 
@@ -122,7 +125,7 @@ const liveGate = checkLiveOptIn(cli);
 if (!liveGate.ok) {
   printOperationClass({ live: false });
   console.error(`error: ${liveGate.reason}`);
-  console.error("hint: use dry-run, or set TRACER_LIVE_GROK=1 + TRACER_LIVE_GUI=1 and pass run/--live");
+  console.error("hint: use dry-run, or set TRACER_LIVE_GROK=1 + TRACER_LIVE_GUI=1 + TRACER_LIVE_GUI_AUTHORIZED=1 and pass run/--live");
   process.exit(2);
 }
 
@@ -138,7 +141,13 @@ if (!promptBound.ok) {
 }
 
 printOperationClass({ live: true });
-console.log("Intent confirmed via dual opt-in (env + run). Provider usage possible.");
+const journeyFilter = cli.journey;
+const journeysPlanned = filterJourneys(journeyFilter);
+printExecutionPlan({
+  journeyIds: journeysPlanned.map((j) => j.id),
+  promptOverride: cli.prompt || null,
+});
+console.log("Intent confirmed via triple opt-in (env + authorization + run). Provider usage possible.");
 console.log("Credentials/tokens will not be printed. Prompts are public-safe/bounded.");
 console.log(
   `Limits: MAX_JOURNEYS_PER_RUN=${MAX_JOURNEYS_PER_RUN}, WD_SESSION=${WD_SESSION_TIMEOUT_MS}ms, APP_READY=${APP_READY_TIMEOUT_MS}ms`,
@@ -146,7 +155,6 @@ console.log(
 
 const jsonOut = cli.json;
 const skipBuild = cli.skipBuild;
-const journeyFilter = cli.journey;
 const port = Number(process.env.TRACER_TAURI_DRIVER_PORT || 4444);
 const host = process.env.TRACER_TAURI_DRIVER_HOST || "127.0.0.1";
 const baseUrl = `http://${host}:${port}`;

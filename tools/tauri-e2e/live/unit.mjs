@@ -144,13 +144,15 @@ assert(looksLikeAuthBlock(null, "login required"), "login required detected");
 assert(looksLikeAuthBlock(null, "unauthorized"), "unauthorized detected");
 assert(!looksLikeAuthBlock("ready", "session ready"), "ready is not auth");
 
-// Opt-in dual gate (clear live env for unit isolation)
+// Opt-in triple gate (clear live env for unit isolation)
 const prevGrok = process.env.TRACER_LIVE_GROK;
 const prevSmoke = process.env.TRACER_LIVE_SMOKE;
 const prevGui = process.env.TRACER_LIVE_GUI;
+const prevAuth = process.env.TRACER_LIVE_GUI_AUTHORIZED;
 delete process.env.TRACER_LIVE_GROK;
 delete process.env.TRACER_LIVE_SMOKE;
 delete process.env.TRACER_LIVE_GUI;
+delete process.env.TRACER_LIVE_GUI_AUTHORIZED;
 
 assert(!checkLiveOptIn(parseArgs([])).ok, "no env/cli → gate closed");
 assert(!checkLiveOptIn(parseArgs(["run"])).ok, "run without env → closed");
@@ -158,8 +160,12 @@ process.env.TRACER_LIVE_GROK = "1";
 assert(!checkLiveOptIn(parseArgs(["run"])).ok, "grok only + run → closed");
 process.env.TRACER_LIVE_GUI = "1";
 assert(!checkLiveOptIn(parseArgs([])).ok, "env without run → closed");
-assert(checkLiveOptIn(parseArgs(["run"])).ok, "both env + run → open");
-assert(checkLiveOptIn(parseArgs(["--live"])).ok, "both env + --live → open");
+assert(!checkLiveOptIn(parseArgs(["run"])).ok, "dual env + run without authorization → closed");
+process.env.TRACER_LIVE_GUI_AUTHORIZED = "1";
+assert(checkLiveOptIn(parseArgs(["run"])).ok, "triple env + run → open");
+assert(checkLiveOptIn(parseArgs(["--live"])).ok, "triple env + --live → open");
+delete process.env.TRACER_LIVE_GUI_AUTHORIZED;
+assert(!checkLiveOptIn(parseArgs(["run"])).ok, "authorization removed → closed again");
 
 // restore
 if (prevGrok === undefined) delete process.env.TRACER_LIVE_GROK;
@@ -168,6 +174,8 @@ if (prevSmoke === undefined) delete process.env.TRACER_LIVE_SMOKE;
 else process.env.TRACER_LIVE_SMOKE = prevSmoke;
 if (prevGui === undefined) delete process.env.TRACER_LIVE_GUI;
 else process.env.TRACER_LIVE_GUI = prevGui;
+if (prevAuth === undefined) delete process.env.TRACER_LIVE_GUI_AUTHORIZED;
+else process.env.TRACER_LIVE_GUI_AUTHORIZED = prevAuth;
 
 // Secret-looking prompt rejection
 assert(isSecretLookingPrompt("api_key=sk-abc"), "secret api_key rejected");

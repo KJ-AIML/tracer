@@ -30,6 +30,11 @@
     "test:release:upgrade": "node tools/release/upgrade-fixture.mjs",
     "release:provenance": "node tools/release/generate-provenance.mjs",
     "release:provenance:verify": "node tools/release/verify-provenance.mjs",
-    "validate:js": "pnpm -r run build && pnpm -r run test"
+    "validate:js": "pnpm -r run build && pnpm -r run test",
+    "release:sign:doctor": "node tools/release/sign-doctor.mjs",
+    "release:sign:test": "node tools/release/sign-test.mjs",
+    "release:sign": "node tools/release/sign.mjs",
+    "release:verify-signature": "node tools/release/verify-signature.mjs",
+    "test:release:signing": "node --test tests/release/windows/signing/*.test.mjs"
   }
 }

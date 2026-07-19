@@ -1,0 +1,12 @@
+{
+  "name": "@tracer/release-signing-tests",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic Authenticode signing readiness tests (no trusted cert required)",
+  "scripts": {
+    "test": "node --test ./*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

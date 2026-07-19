@@ -48,3 +48,7 @@
 | N+1 portable sha256 | `e530bae51a42f81d213e59dcd72680c14efd3814956e4fbbafb715f296acf4f2` |
 | N+1 NSIS sha256 | `5ca4452b974070bcb47dc21734d995abaeb502ad1f5354391e7fc79bf5ba5e2a` |
 | Signing | `UNSIGNED_DEVELOPMENT_RC` |
+
+## Tip pin
+
+Report commit (pre-finalize tip candidate): `530b4d891a994644f088dd774c2a9640616d2b3c`. Final `gateTipSha` is main after FF + any pin commit.

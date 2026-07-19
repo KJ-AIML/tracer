@@ -42,3 +42,7 @@ $env:TRACER_RC_PRIOR_NSIS="target/release-rc/upgrade-fixture/vN/Tracer_0.1.0_x64
 node tools/release/validate-windows.mjs --skip-build
 cargo test -p tracer-storage --test upgrade_safety
 ```
+
+## Tip pin
+
+Report commit (pre-finalize tip candidate): `530b4d891a994644f088dd774c2a9640616d2b3c`. Final `gateTipSha` is main after FF + any pin commit.

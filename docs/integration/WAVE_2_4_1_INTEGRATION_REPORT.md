@@ -151,3 +151,16 @@ node tools/release/validate-windows.mjs --skip-build
 | Keep | `tracer-wave2.3-windows-rc` untouched |
 | Lease release | `tracer-w2-upgrade-fixture-integration` |
 | Push | **Never** |
+
+## 12. Commit pin table
+
+| Role | SHA |
+|---|---|
+| Baseline main (Gate 2.3) | `4c5f5599df16325f39da1b3165d7c02be94ac0a4` |
+| W2.4.1-A tip | `c03502603a739195bcc126bd1f25584f3ff427d3` |
+| Merge | `c348d24` (full: see git) |
+| Provenance buildSource/gateTip distinction | `d4c10ba2265746566c6c5b9db08164c24843f8bf` |
+| **N+1_BUILD_SOURCE_SHA** | `e04f81f5089d0414ef8967b0d98384d7b199b9b7` |
+| Gate 2.4.1 reports | `530b4d891a994644f088dd774c2a9640616d2b3c` |
+
+Final `gateTipSha` / annotated tag recorded after fast-forward (this pin commit intentionally omits its own hash until the tip commit lands).

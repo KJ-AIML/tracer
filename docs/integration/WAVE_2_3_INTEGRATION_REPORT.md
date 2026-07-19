@@ -154,3 +154,9 @@ Signing: **UNSIGNED_DEVELOPMENT_RC** (NotSigned). Identity PASS (Tracer / `dev.t
 | Gate 2.3 reports | `f7501159f84ff024f73877e3347a06f4299f2815` |
 
 Final main SHA and annotated tag are recorded after fast-forward (this pin commit intentionally omits its own hash).
+
+## W2.4.1 supersession note (additive; does not rewrite Gate 2.3 history)
+
+Gate 2.3 recorded RC-03 as **PARTIAL / FIXTURE_LIMITED** (no prior package fixture). That historical classification remains accurate for Gate 2.3.
+
+**Current RC-03 status after W2.4.1: PASS** — real N (0.1.0) → N+1 (0.1.1) NSIS upgrade proven on Gate 2.4.1 with data preservation. See `docs/integration/WAVE_2_4_1_INTEGRATION_REPORT.md` and `WINDOWS_UPGRADE_READINESS.md`.

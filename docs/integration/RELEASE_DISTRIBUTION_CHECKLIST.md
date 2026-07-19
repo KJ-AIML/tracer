@@ -29,3 +29,9 @@
 - Claim SIGNED without Authenticode evidence  
 - Fold release packaging into `pnpm -r test`  
 - Auto-run live Grok during distribution smoke
+
+## W2.4.1 supersession note (additive; does not rewrite Gate 2.3 history)
+
+Gate 2.3 recorded RC-03 as **PARTIAL / FIXTURE_LIMITED** (no prior package fixture). That historical classification remains accurate for Gate 2.3.
+
+**Current RC-03 status after W2.4.1: PASS** — real N (0.1.0) → N+1 (0.1.1) NSIS upgrade proven on Gate 2.4.1 with data preservation. See `docs/integration/WAVE_2_4_1_INTEGRATION_REPORT.md` and `WINDOWS_UPGRADE_READINESS.md`.

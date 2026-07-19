@@ -8,7 +8,7 @@
 
 - **Never** run as part of standard CI or `pnpm -r test`.
 - Require **explicit operator intent**:
-  - env: `TRACER_LIVE_GROK=1` **and** `TRACER_LIVE_GUI=1`
+  - env: `TRACER_LIVE_GROK=1` **and** `TRACER_LIVE_GUI=1` **and** `TRACER_LIVE_GUI_AUTHORIZED=1` (W2.4.3-A)
   - CLI: `node tools/tauri-e2e/live/lgj.mjs run` (not dry-run)
 - Credentials come from existing local auth only (never commit / print tokens).
 - Never fabricate LGJ-05 (approval RR) `PASS` without observed reverse-request.
@@ -20,9 +20,10 @@
 # Dry-run (safe; no GUI live spawn, no provider)
 node tools/tauri-e2e/live/dry-run.mjs
 
-# Live LGJ suite
+# Live LGJ suite (requires operator authorization)
 $env:TRACER_LIVE_GROK = "1"
 $env:TRACER_LIVE_GUI = "1"
+$env:TRACER_LIVE_GUI_AUTHORIZED = "1"
 node tools/tauri-e2e/live/lgj.mjs run --out target/live-gui/result.json
 ```
 

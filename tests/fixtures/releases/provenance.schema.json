@@ -19,7 +19,26 @@
     "filename",
     "relativePath",
     "sizeBytes",
-    "sha256"
+    "sha256",
+    "artifactSha256",
+    "preSignSha256",
+    "postSignSha256",
+    "signaturePresent",
+    "signatureStatus",
+    "certificateSubject",
+    "certificateThumbprint",
+    "certificateIssuer",
+    "certificateValidity",
+    "timestampPresent",
+    "timestampAuthority",
+    "signingMode",
+    "signingTool",
+    "signingToolVersion"
   ],
-  "note": "Binaries are never committed. sourceSha aliases buildSourceSha; gateTipSha may advance after report-only commits."
+  "signingModes": [
+    "UNSIGNED",
+    "SELF_SIGNED_TEST",
+    "TRUSTED_AUTHENTICODE"
+  ],
+  "note": "Binaries are never committed. sourceSha aliases buildSourceSha; gateTipSha may advance after report-only commits. Unsigned artifacts must still emit explicit signing fields (signaturePresent=false, signingMode=UNSIGNED)."
 }
